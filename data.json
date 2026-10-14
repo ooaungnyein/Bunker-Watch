@@ -1,0 +1,106 @@
+{
+  "vesselName": "MT OCEAN STAR",
+  "imoNumber": "9876543",
+  "department": "engine",
+  "machinery": [
+    {
+      "id": "me",
+      "name": "Main Engine (ME)",
+      "desc": "Primary propulsion system unit",
+      "icon": "me",
+      "usedOils": ["me-sys", "me-cyl"],
+      "lastModified": 1728912000000
+    },
+    {
+      "id": "ge",
+      "name": "Generator Engine (GE)",
+      "desc": "Auxiliary power generation units",
+      "icon": "ge",
+      "usedOils": ["ge-sys"],
+      "lastModified": 1728912000000
+    },
+    {
+      "id": "blr",
+      "name": "Boiler (BLR)",
+      "desc": "Steam generation system",
+      "icon": "blr",
+      "usedOils": [],
+      "lastModified": 1728912000000
+    }
+  ],
+  "fuelTypes": [
+    {
+      "id": "fo",
+      "type": "FO",
+      "consumption": "24.5",
+      "capacity": "1200",
+      "rob": "850.2",
+      "initialRob": "850.2",
+      "lastModified": 1728912000000
+    },
+    {
+      "id": "do",
+      "type": "DO",
+      "consumption": "2.8",
+      "capacity": "350",
+      "rob": "180.5",
+      "initialRob": "180.5",
+      "lastModified": 1728912000000
+    }
+  ],
+  "oilTypes": [
+    {
+      "id": "me-sys",
+      "name": "ME SYS",
+      "consumption": "85",
+      "threshold": "200",
+      "capacity": "3000",
+      "rob": "1850",
+      "initialRob": "1850",
+      "lastModified": 1728912000000
+    },
+    {
+      "id": "me-cyl",
+      "name": "ME CYL",
+      "consumption": "120",
+      "threshold": "300",
+      "capacity": "4500",
+      "rob": "2900",
+      "initialRob": "2900",
+      "lastModified": 1728912000000
+    },
+    {
+      "id": "ge-sys",
+      "name": "GE SYS",
+      "consumption": "35",
+      "threshold": "100",
+      "capacity": "1500",
+      "rob": "950",
+      "initialRob": "950",
+      "lastModified": 1728912000000
+    }
+  ],
+  "calculationMethod": "flowmeter",
+  "fuelConsumptionData": {},
+  "oilConsumptionData": {},
+  "machineryHours": {},
+  "consumptionLogs": [],
+  "bunkerLogs": [],
+  "onboardingCompleted": true,
+  "voyageStatus": {
+    "date": "2026-10-14",
+    "time": "12:00",
+    "situation": "Noon",
+    "voyageNumber": "042",
+    "portOfDeparture": "SINGAPORE"
+  },
+  "dashboardCards": [
+    { "id": "vessel-info", "type": "vessel-info", "title": "Current Assignment", "visible": true },
+    { "id": "date", "type": "voyage-date", "title": "Report Date", "visible": true },
+    { "id": "time-status", "type": "voyage-time", "title": "Time & Status", "visible": true },
+    { "id": "voyage-info", "type": "voyage-info", "title": "Voyage Info", "visible": true },
+    { "id": "last-report", "type": "last-report", "title": "Last Submitted Report", "visible": true },
+    { "id": "activity", "type": "activity", "title": "Today's Activity", "visible": true }
+  ],
+  "lastModified": 1728912000000
+}
