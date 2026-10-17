@@ -42,7 +42,13 @@ import {
   Layout,
   CheckCircle,
   AlertCircle,
-  WifiOff
+  AlertTriangle,
+  WifiOff,
+  Copy,
+  CheckCheck,
+  Share2,
+  ClipboardList,
+  PenTool
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 // Background P2P Sync Logic
@@ -124,6 +130,14 @@ type OnboardingData = {
     situation: string;
     voyageNumber: string;
     portOfDeparture: string;
+    destinationPort?: string;
+    voyageStage?: string;
+    etaDate?: string;
+    etaTime?: string;
+    distanceToGo?: string;
+    totalDistance?: string;
+    condition?: string;
+    remarks?: string;
   };
   dashboardCards: {
     id: string;
@@ -136,6 +150,11 @@ type OnboardingData = {
 
 // --- Default Data ---
 
+const defaultFuelTypesList: FuelType[] = [
+  { id: 'vlsfo', type: 'VLSFO', consumption: '24.5', capacity: '1200', rob: '840.5', initialRob: '850.0', lastModified: Date.now() },
+  { id: 'lsmgo', type: 'LSMGO', consumption: '3.2', capacity: '350', rob: '165.2', initialRob: '170.0', lastModified: Date.now() }
+];
+
 const defaultData: OnboardingData = {
   vesselName: '',
   imoNumber: '',
@@ -145,14 +164,11 @@ const defaultData: OnboardingData = {
     { id: 'ge', name: 'Generator Engine (GE)', desc: 'Auxiliary power generation units', icon: 'ge', usedOils: ['ge-sys'], lastModified: Date.now() },
     { id: 'blr', name: 'Boiler (BLR)', desc: 'Steam generation system', icon: 'blr', usedOils: [], lastModified: Date.now() }
   ],
-  fuelTypes: [
-    { id: 'fo', type: 'FO', consumption: '', capacity: '', rob: '', initialRob: '', lastModified: Date.now() },
-    { id: 'do', type: 'DO', consumption: '', capacity: '', rob: '', initialRob: '', lastModified: Date.now() }
-  ],
+  fuelTypes: defaultFuelTypesList,
   oilTypes: [
-    { id: 'me-sys', name: 'ME SYS', consumption: '', threshold: '', capacity: '', rob: '', initialRob: '', lastModified: Date.now() },
-    { id: 'me-cyl', name: 'ME CYL', consumption: '', threshold: '', capacity: '', rob: '', initialRob: '', lastModified: Date.now() },
-    { id: 'ge-sys', name: 'GE SYS', consumption: '', threshold: '', capacity: '', rob: '', initialRob: '', lastModified: Date.now() }
+    { id: 'me-sys', name: 'ME SYS', consumption: '35', threshold: '500', capacity: '12000', rob: '4850', initialRob: '5000', lastModified: Date.now() },
+    { id: 'me-cyl', name: 'ME CYL', consumption: '120', threshold: '1000', capacity: '25000', rob: '14200', initialRob: '15000', lastModified: Date.now() },
+    { id: 'ge-sys', name: 'GE SYS', consumption: '20', threshold: '300', capacity: '8000', rob: '3150', initialRob: '3300', lastModified: Date.now() }
   ],
   calculationMethod: 'flowmeter',
   fuelConsumptionData: {},
@@ -166,12 +182,14 @@ const defaultData: OnboardingData = {
     time: "12:00",
     situation: 'Noon',
     voyageNumber: '001',
-    portOfDeparture: 'SINGAPORE'
+    portOfDeparture: 'SINGAPORE',
+    destinationPort: 'ROTTERDAM',
+    voyageStage: 'noon'
   },
   dashboardCards: [
     { id: 'vessel-info', type: 'vessel-info', title: 'Current Assignment', visible: true },
     { id: 'date', type: 'voyage-date', title: 'Report Date', visible: true },
-    { id: 'time-status', type: 'voyage-time', title: 'Time & Status', visible: true },
+    { id: 'time-status', type: 'voyage-time', title: 'Latest Situation', visible: true },
     { id: 'voyage-info', type: 'voyage-info', title: 'Voyage Info', visible: true },
     { id: 'last-report', type: 'last-report', title: 'Last Submitted Report', visible: true },
     { id: 'activity', type: 'activity', title: "Today's Activity", visible: true }
@@ -191,10 +209,10 @@ const sanitizeData = (incoming: any, fallbackData: OnboardingData = defaultData)
     imoNumber: typeof incoming.imoNumber === 'string' ? incoming.imoNumber : fallbackData.imoNumber,
     department: (incoming.department === 'deck' || incoming.department === 'engine') ? incoming.department : fallbackData.department,
     machinery: (Array.isArray(incoming.machinery) && incoming.machinery.length > 0) ? incoming.machinery : fallbackData.machinery,
-    fuelTypes: (Array.isArray(incoming.fuelTypes) && incoming.fuelTypes.length > 0) ? incoming.fuelTypes : fallbackData.fuelTypes,
+    fuelTypes: (Array.isArray(incoming.fuelTypes) && incoming.fuelTypes.length > 0) ? incoming.fuelTypes : defaultFuelTypesList,
     oilTypes: (Array.isArray(incoming.oilTypes) && incoming.oilTypes.length > 0) ? incoming.oilTypes : fallbackData.oilTypes,
     calculationMethod: incoming.calculationMethod || fallbackData.calculationMethod || 'flowmeter',
-    fuelConsumptionData: (incoming.fuelConsumptionData && typeof incoming.fuelConsumptionData === 'object') ? incoming.fuelConsumptionData : {},
+    fuelConsumptionData: {},
     oilConsumptionData: (incoming.oilConsumptionData && typeof incoming.oilConsumptionData === 'object') ? incoming.oilConsumptionData : {},
     machineryHours: (incoming.machineryHours && typeof incoming.machineryHours === 'object') ? incoming.machineryHours : {},
     consumptionLogs: Array.isArray(incoming.consumptionLogs) ? incoming.consumptionLogs : [],
@@ -212,7 +230,7 @@ const sanitizeData = (incoming: any, fallbackData: OnboardingData = defaultData)
 };
 
 const recalculateRob = (currentData: OnboardingData) => {
-  const fuelList = Array.isArray(currentData.fuelTypes) ? currentData.fuelTypes : [];
+  const fuelList = (Array.isArray(currentData.fuelTypes) && currentData.fuelTypes.length > 0) ? currentData.fuelTypes : defaultFuelTypesList;
   const oilList = Array.isArray(currentData.oilTypes) ? currentData.oilTypes : [];
   const bunkerList = Array.isArray(currentData.bunkerLogs) ? currentData.bunkerLogs : [];
   const consumptionList = Array.isArray(currentData.consumptionLogs) ? currentData.consumptionLogs : [];
@@ -397,59 +415,104 @@ const SplashScreen = ({ onFinish }: { onFinish: () => void }) => {
   );
 };
 
-const BottomNav = ({ activeTab, onTabChange, theme, data }: { activeTab: string, onTabChange: (tab: string) => void, theme: 'dark' | 'light', data: OnboardingData }) => {
-  const getFuelColor = (type: string) => {
-    const upperType = type.toUpperCase();
-    if (upperType.includes('FO')) return '#FF4D4D';
-    if (upperType.includes('DO')) return '#FF80BF'; // Soft Pink
-    return '#4DE8E8'; // Default Cyan
-  };
-
+const BottomNav = ({ activeTab, onTabChange, theme }: { activeTab: string, onTabChange: (tab: string) => void, theme: 'dark' | 'light', data?: OnboardingData }) => {
   const tabs = [
     { id: 'dashboard', label: 'DASHBOARD', icon: <LayoutDashboard size={20} />, color: '#4DE8E8' },
-    ...data.fuelTypes.map(f => ({ id: `fuel-${f.id}`, label: f.type.toUpperCase(), icon: <Fuel size={20} />, color: getFuelColor(f.type) })),
-    { id: 'lo', label: 'LO', icon: <Droplets size={20} />, color: '#4DE8E8' },
-    { id: 'report', label: 'REPORT', icon: <FileText size={20} />, color: '#4DE8E8' },
-  ].filter(tab => {
-    if (data.department === 'deck') {
-      return tab.id === 'dashboard' || tab.id === 'report';
-    }
-    return true;
-  });
+    { id: 'daily-entry', label: 'DAILY ENTRY (EVENT / SITUATION)', icon: <ClipboardList size={20} />, color: '#00A8A8' },
+  ];
 
-  const activeColor = tabs.find(t => t.id === activeTab)?.color || '#4DE8E8';
+  const currentTabId = activeTab === 'dashboard' ? 'dashboard' : 'daily-entry';
 
   return (
-    <nav id="app-nav" className={`fixed bottom-0 left-0 right-0 max-w-md mx-auto ${theme === 'dark' ? 'bg-[#0A192F]/95 border-white/10' : 'bg-[#0A3161] border-white/10'} backdrop-blur-2xl border-t flex h-16 sm:h-20 pb-2 sm:pb-6 z-40 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] rounded-t-2xl sm:rounded-t-[32px]`}>
-      {tabs.map((tab) => (
-        <button 
-          key={tab.id}
-          onClick={() => onTabChange(tab.id)}
-          className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1 sm:gap-1.5 transition-all relative group px-0.5 ${
-            activeTab === tab.id 
-              ? '' 
-              : 'text-slate-400 hover:text-slate-200'
-          }`}
-          style={{ color: activeTab === tab.id ? tab.color : undefined }}
-        >
-          <div className={`p-1.5 sm:p-2 rounded-lg sm:rounded-xl transition-all ${activeTab === tab.id ? 'bg-white/10 scale-105 sm:scale-110' : 'group-hover:bg-white/5'}`}>
-            {React.isValidElement(tab.icon) ? React.cloneElement(tab.icon as React.ReactElement<any>, { size: 18 }) : tab.icon}
-          </div>
-          <span className={`text-[7px] sm:text-[8px] font-black tracking-wider sm:tracking-[0.2em] transition-all truncate max-w-full px-0.5 ${activeTab === tab.id ? 'opacity-100' : 'opacity-60'}`}>{tab.label}</span>
-          {activeTab === tab.id && (
-            <motion.div 
-              layoutId="activeTab"
-              className="absolute -top-px left-1/4 right-1/4 h-0.5 shadow-[0_0_10px_currentColor]"
-              style={{ backgroundColor: tab.color }}
-            />
-          )}
-        </button>
-      ))}
+    <nav id="app-nav" className={`fixed bottom-0 left-0 right-0 max-w-md mx-auto ${theme === 'dark' ? 'bg-[#0A192F]/95 border-white/10' : 'bg-[#0A3161] border-white/10'} backdrop-blur-2xl border-t flex h-16 sm:h-20 pb-2 sm:pb-6 z-40 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] rounded-t-2xl sm:rounded-t-[32px] px-6`}>
+      {tabs.map((tab) => {
+        const isActive = currentTabId === tab.id;
+        return (
+          <button 
+            key={tab.id}
+            onClick={() => onTabChange(tab.id)}
+            className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1 sm:gap-1.5 transition-all relative group px-2 py-1 ${
+              isActive 
+                ? 'text-[#4DE8E8]' 
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+            style={{ color: isActive ? tab.color : undefined }}
+          >
+            <div className={`p-2 rounded-xl transition-all ${isActive ? 'bg-white/10 scale-110 shadow-lg shadow-cyan-500/10' : 'group-hover:bg-white/5'}`}>
+              {React.isValidElement(tab.icon) ? React.cloneElement(tab.icon as React.ReactElement<any>, { size: 20 }) : tab.icon}
+            </div>
+            <span className={`text-[8px] sm:text-[9.5px] font-black tracking-widest sm:tracking-[0.25em] transition-all truncate max-w-full px-1 ${isActive ? 'opacity-100 font-black' : 'opacity-60'}`}>{tab.label}</span>
+            {isActive && (
+              <motion.div 
+                layoutId="activeTab"
+                className="absolute -top-px left-8 right-8 h-0.5 shadow-[0_0_12px_currentColor]"
+                style={{ backgroundColor: tab.color }}
+              />
+            )}
+          </button>
+        );
+      })}
     </nav>
   );
 };
 
-const Dashboard = ({ data, setData, onOpenSettings, theme, isSyncing, isOffline, lastSynced, setShowBunkerModal }: { data: OnboardingData, setData: React.Dispatch<React.SetStateAction<OnboardingData>>, onOpenSettings: (section?: string) => void, theme: 'dark' | 'light', isSyncing: boolean, isOffline: boolean, lastSynced: string | null, setShowBunkerModal: (show: boolean) => void }) => {
+const VoyageVesselIcon = ({ theme, className = "w-8 h-8 sm:w-9 sm:h-9" }: { theme: 'dark' | 'light', className?: string }) => (
+  <svg 
+    viewBox="0 0 46 42" 
+    className={className} 
+    fill="none" 
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    {/* Main Sail (Right Triangular Sail) */}
+    <path 
+      d="M23 4 L40 26 L23 26 Z" 
+      fill={theme === 'dark' ? '#00E5E5' : '#0284C7'} 
+      fillOpacity="0.9"
+      stroke={theme === 'dark' ? '#E0F2FE' : '#0A3161'} 
+      strokeWidth="1.6" 
+      strokeLinejoin="round" 
+    />
+    {/* Fore Sail / Jib (Left Triangular Sail) */}
+    <path 
+      d="M20 9 L7 26 L20 26 Z" 
+      fill={theme === 'dark' ? '#4DE8E8' : '#38BDF8'} 
+      fillOpacity="0.8"
+      stroke={theme === 'dark' ? '#E0F2FE' : '#0A3161'} 
+      strokeWidth="1.6" 
+      strokeLinejoin="round" 
+    />
+    {/* Mast (Vertical) */}
+    <line 
+      x1="21.5" 
+      y1="3" 
+      x2="21.5" 
+      y2="29" 
+      stroke={theme === 'dark' ? '#FFFFFF' : '#0F172A'} 
+      strokeWidth="2.2" 
+      strokeLinecap="round" 
+    />
+    {/* Boat Hull (Angled boat hull matching sketch) */}
+    <path 
+      d="M5 27 L10 37 L34 37 L39 27 Z" 
+      fill={theme === 'dark' ? '#0A192F' : '#FFFFFF'} 
+      stroke={theme === 'dark' ? '#4DE8E8' : '#0A3161'} 
+      strokeWidth="2" 
+      strokeLinejoin="round" 
+    />
+    {/* Hull deck waterline stripe */}
+    <line 
+      x1="8" 
+      y1="30" 
+      x2="36" 
+      y2="30" 
+      stroke={theme === 'dark' ? '#00E5E5' : '#0284C7'} 
+      strokeWidth="1.4" 
+      strokeLinecap="round" 
+    />
+  </svg>
+);
+
+const Dashboard = ({ data, setData, onOpenSettings, theme, isSyncing, isOffline, lastSynced, setShowBunkerModal, onNavigateToReport }: { data: OnboardingData, setData: React.Dispatch<React.SetStateAction<OnboardingData>>, onOpenSettings: (section?: string) => void, theme: 'dark' | 'light', isSyncing: boolean, isOffline: boolean, lastSynced: string | null, setShowBunkerModal: (show: boolean) => void, onNavigateToReport?: () => void }) => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
 
@@ -462,6 +525,47 @@ const Dashboard = ({ data, setData, onOpenSettings, theme, isSyncing, isOffline,
   const today = new Date();
   const dateOptions: Intl.DateTimeFormatOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
   const formattedDate = today.toLocaleDateString(undefined, dateOptions);
+
+  // Voyage Waypoints derived from user sketch - sea replaced with COSP and EOSP
+  const VOYAGE_WAYPOINTS = [
+    { id: 'port-dep', label: 'port', sub: 'Departure Port', percent: 6, type: 'dot', defaultSituation: 'Departure', subText: data.voyageStatus.portOfDeparture || 'SIN' },
+    { id: 'anchor-dep', label: 'anchor', sub: 'Departure Anchor', percent: 21, type: 'tick', defaultSituation: 'Anchor', subText: '' },
+    { id: 'sea-1', label: 'COSP', sub: 'COSP (Commence Sea Passage)', percent: 36, type: 'subtick', defaultSituation: 'COSP', subText: '' },
+    { id: 'noon', label: 'Noon', sub: 'Noon Report (12:00 LT Reset)', percent: 50, type: 'noon-dot', defaultSituation: 'Noon', subText: '' },
+    { id: 'sea-2', label: 'EOSP', sub: 'EOSP (End of Sea Passage)', percent: 64, type: 'subtick', defaultSituation: 'EOSP', subText: '' },
+    { id: 'anchor-arr', label: 'anchor', sub: 'Arrival Anchor', percent: 79, type: 'tick', defaultSituation: 'Anchor', subText: '' },
+    { id: 'port-arr', label: 'port', sub: 'Destination Port', percent: 94, type: 'dot', defaultSituation: 'FWE', subText: data.voyageStatus.destinationPort || 'RTM' },
+  ];
+
+  const currentStageId = useMemo(() => {
+    const current = data.voyageStatus.voyageStage;
+    if (current && VOYAGE_WAYPOINTS.some(w => w.id === current)) {
+      return current;
+    }
+    const sit = data.voyageStatus.situation;
+    if (sit === 'Noon') return 'noon';
+    if (sit === 'Anchor') return 'anchor-dep';
+    if (sit === 'COSP') return 'sea-1';
+    if (sit === 'EOSP') return 'sea-2';
+    if (sit === 'FWE') return 'port-arr';
+    if (sit === 'Departure' || sit === 'Alongside') return 'port-dep';
+    return 'noon';
+  }, [data.voyageStatus.voyageStage, data.voyageStatus.situation]);
+
+  const currentWaypoint = VOYAGE_WAYPOINTS.find(w => w.id === currentStageId) || VOYAGE_WAYPOINTS[3];
+
+  const handleWaypointSelect = (wp: typeof VOYAGE_WAYPOINTS[number]) => {
+    if (data.department === 'deck') return;
+    setData(prev => ({
+      ...prev,
+      voyageStatus: {
+        ...prev.voyageStatus,
+        voyageStage: wp.id,
+        situation: wp.defaultSituation || prev.voyageStatus.situation
+      },
+      lastModified: Date.now()
+    }));
+  };
   
   const reportDate = data.voyageStatus.date;
   const todayLogs = data.consumptionLogs.filter(log => log.timestamp.startsWith(reportDate))
@@ -503,6 +607,32 @@ const Dashboard = ({ data, setData, onOpenSettings, theme, isSyncing, isOffline,
   };
 
   const situations = ['Noon', 'Standby', 'FWE', 'COSP', 'EOSP', 'Departure', 'Alongside', 'Anchor'];
+
+  // Critical visual warning if fuel or oil ROB falls below 15% of total capacity
+  const lowCapacityAlerts = useMemo(() => {
+    const alerts: { id: string; name: string; type: 'fuel' | 'oil'; rob: number; capacity: number; percent: number }[] = [];
+    (data.fuelTypes || []).forEach(f => {
+      const rob = parseFloat(f.rob) || 0;
+      const cap = parseFloat(f.capacity) || 0;
+      if (cap > 0) {
+        const pct = (rob / cap) * 100;
+        if (pct < 15) {
+          alerts.push({ id: f.id, name: f.type, type: 'fuel', rob, capacity: cap, percent: Math.round(pct) });
+        }
+      }
+    });
+    (data.oilTypes || []).forEach(o => {
+      const rob = parseFloat(o.rob) || 0;
+      const cap = parseFloat(o.capacity) || 0;
+      if (cap > 0) {
+        const pct = (rob / cap) * 100;
+        if (pct < 15) {
+          alerts.push({ id: o.id, name: o.name, type: 'oil', rob, capacity: cap, percent: Math.round(pct) });
+        }
+      }
+    });
+    return alerts;
+  }, [data.fuelTypes, data.oilTypes]);
 
   const getIcon = (iconType: string) => {
     switch (iconType) {
@@ -621,6 +751,33 @@ const Dashboard = ({ data, setData, onOpenSettings, theme, isSyncing, isOffline,
       </header>
 
       <main id="app-main" className="px-3.5 sm:px-6 -mt-6 sm:-mt-8 space-y-4 sm:space-y-6 relative z-10">
+        {/* Critical ROB Low Capacity Visual Warning (< 15%) */}
+        {lowCapacityAlerts.length > 0 && (
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-red-500/15 border-2 border-red-500/40 shadow-[0_0_25px_rgba(239,68,68,0.25)] flex items-center justify-between gap-3 animate-pulse">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="p-2 sm:p-2.5 rounded-xl bg-red-500/25 text-red-400 shrink-0">
+                <AlertTriangle size={20} className="animate-bounce sm:w-6 sm:h-6" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-red-300">
+                    CRITICAL ROB WARNING: INVENTORY &lt; 15% CAPACITY
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded text-[7px] font-black uppercase bg-red-500 text-white shrink-0">
+                    LOW LEVEL
+                  </span>
+                </div>
+                <p className="text-[8px] sm:text-[9.5px] font-bold text-red-200/90 truncate mt-0.5">
+                  {lowCapacityAlerts.map(a => `${a.name}: ${a.rob} ${a.type === 'fuel' ? 'MT' : 'L'} remaining (${a.percent}% of ${a.capacity})`).join(' • ')}
+                </p>
+              </div>
+            </div>
+            <span className="hidden sm:inline-block px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-wider bg-red-500 text-white shrink-0">
+              CRITICAL
+            </span>
+          </div>
+        )}
+
         {/* Vessel Info Card (formerly in header) */}
         {data.dashboardCards.filter(c => c.visible && c.type === 'vessel-info').map(card => (
           <div key={card.id} className="relative group">
@@ -690,8 +847,15 @@ const Dashboard = ({ data, setData, onOpenSettings, theme, isSyncing, isOffline,
 
         {/* Grid for small cards */}
         <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
-          {data.dashboardCards.filter(c => c.visible && (c.type === 'voyage-date' || c.type === 'voyage-time' || c.type === 'voyage-info')).map(card => (
-            <div key={card.id} className="relative group">
+          {data.dashboardCards
+            .filter(c => c.visible && (c.type === 'voyage-date' || c.type === 'voyage-time' || c.type === 'voyage-info'))
+            .sort((a, b) => {
+              if (a.type === 'voyage-info' && b.type !== 'voyage-info') return 1;
+              if (b.type === 'voyage-info' && a.type !== 'voyage-info') return -1;
+              return 0;
+            })
+            .map(card => (
+            <div key={card.id} className={`relative group ${card.type === 'voyage-info' ? 'col-span-2 w-full' : 'col-span-1'}`}>
               {isEditMode && (
                 <div className="absolute -top-2 -right-2 z-20 flex gap-1">
                   <div className="flex bg-[#0A192F] rounded-full p-1 shadow-lg border border-white/10">
@@ -742,92 +906,228 @@ const Dashboard = ({ data, setData, onOpenSettings, theme, isSyncing, isOffline,
 
               {card.type === 'voyage-date' && (
                 <div className={`${theme === 'dark' ? 'bg-[#0A192F]/80 border-white/10' : 'bg-white border-[#0A3161]/10'} backdrop-blur-md p-3.5 sm:p-5 rounded-2xl sm:rounded-[28px] shadow-xl border h-full transition-all hover:translate-y-[-2px]`}>
-                  <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
-                    <div className={`p-1.5 sm:p-2 rounded-lg sm:rounded-xl ${theme === 'dark' ? 'bg-white/5 text-[#4DE8E8]' : 'bg-[#0A3161]/5 text-[#0A3161]'}`}>
-                      <Calendar size={16} className="sm:w-[18px] sm:h-[18px]" />
+                  <div className="flex items-center justify-between mb-2 sm:mb-3">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <div className={`p-1.5 sm:p-2 rounded-lg sm:rounded-xl ${theme === 'dark' ? 'bg-white/5 text-[#4DE8E8]' : 'bg-[#0A3161]/5 text-[#0A3161]'}`}>
+                        <Calendar size={16} className="sm:w-[18px] sm:h-[18px]" />
+                      </div>
+                      <span className="text-[8px] sm:text-[9px] font-black text-slate-400 uppercase tracking-wider sm:tracking-[0.2em] truncate">{card.title}</span>
                     </div>
-                    <span className="text-[8px] sm:text-[9px] font-black text-slate-400 uppercase tracking-wider sm:tracking-[0.2em] truncate">{card.title}</span>
+                    <span className="text-[7px] sm:text-[7.5px] font-black uppercase tracking-wider text-slate-400 bg-white/5 px-2 py-0.5 rounded-full border border-white/10">
+                      Read-only
+                    </span>
                   </div>
-                  <input 
-                    type="date" 
-                    value={data.voyageStatus.date}
-                    onChange={(e) => setData({ ...data, voyageStatus: { ...data.voyageStatus, date: e.target.value } })}
-                    disabled={data.department === 'deck'}
-                    className={`bg-transparent border-none p-0 text-sm sm:text-lg font-black focus:ring-0 focus:outline-none cursor-pointer w-full ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'} ${data.department === 'deck' ? 'cursor-default' : ''}`}
-                  />
+                  <div className="flex flex-col">
+                    <span className={`text-base sm:text-lg font-black tracking-tight ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>
+                      {data.voyageStatus.date ? new Date(data.voyageStatus.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) : 'No Date'}
+                    </span>
+                    <span className="text-[7.5px] sm:text-[8px] font-bold text-[#00A8A8] uppercase tracking-wider mt-1 flex items-center gap-1">
+                      <CheckCircle size={10} /> Latest Log Date
+                    </span>
+                  </div>
                 </div>
               )}
 
               {card.type === 'voyage-time' && (
                 <div className={`${theme === 'dark' ? 'bg-[#0A192F]/80 border-white/10' : 'bg-white border-[#0A3161]/10'} backdrop-blur-md p-3.5 sm:p-5 rounded-2xl sm:rounded-[28px] shadow-xl border h-full transition-all hover:translate-y-[-2px]`}>
-                  <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
-                    <div className={`p-1.5 sm:p-2 rounded-lg sm:rounded-xl ${theme === 'dark' ? 'bg-white/5 text-[#4DE8E8]' : 'bg-[#0A3161]/5 text-[#0A3161]'}`}>
-                      <Clock size={16} className="sm:w-[18px] sm:h-[18px]" />
+                  <div className="flex items-center justify-between mb-2 sm:mb-3">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <div className={`p-1.5 sm:p-2 rounded-lg sm:rounded-xl ${theme === 'dark' ? 'bg-white/5 text-[#4DE8E8]' : 'bg-[#0A3161]/5 text-[#0A3161]'}`}>
+                        <Clock size={16} className="sm:w-[18px] sm:h-[18px]" />
+                      </div>
+                      <span className="text-[8px] sm:text-[9px] font-black text-slate-400 uppercase tracking-wider sm:tracking-[0.2em] truncate">Latest Situation</span>
                     </div>
-                    <span className="text-[8px] sm:text-[9px] font-black text-slate-400 uppercase tracking-wider sm:tracking-[0.2em] truncate">{card.title}</span>
+                    <span className="text-[7px] sm:text-[7.5px] font-black uppercase tracking-wider text-slate-400 bg-white/5 px-2 py-0.5 rounded-full border border-white/10">
+                      Read-only
+                    </span>
                   </div>
                   <div className="flex flex-col">
-                    <input 
-                      type="time" 
-                      value={data.voyageStatus.time}
-                      onChange={(e) => setData({ ...data, voyageStatus: { ...data.voyageStatus, time: e.target.value } })}
-                      disabled={data.department === 'deck'}
-                      className={`bg-transparent border-none p-0 text-2xl sm:text-3xl font-black focus:ring-0 focus:outline-none w-full cursor-pointer tracking-tighter ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'} ${data.department === 'deck' ? 'cursor-default' : ''}`}
-                    />
-                    <div className="relative flex items-center gap-1.5 sm:gap-2 mt-1 group/select">
-                      <div className="text-[#4DE8E8] opacity-70 group-hover/select:opacity-100 transition-opacity shrink-0">
-                        {situationIcons[data.voyageStatus.situation]}
+                    <div className="flex items-baseline gap-2">
+                      <span className={`text-2xl sm:text-3xl font-black tracking-tighter ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>
+                        {data.voyageStatus.time || "12:00"}
+                      </span>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">HRS</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#00A8A8]/20 border border-[#00A8A8]/40 text-[#4DE8E8]">
+                        {situationIcons[data.voyageStatus.situation] || <Activity size={13} />}
+                        <span className="text-[9.5px] sm:text-[11px] font-black uppercase tracking-wider text-[#4DE8E8]">
+                          {data.voyageStatus.situation}
+                        </span>
                       </div>
-                      <div className="relative flex-1 min-w-0">
-                        <select 
-                          value={data.voyageStatus.situation}
-                          onChange={(e) => setData({ ...data, voyageStatus: { ...data.voyageStatus, situation: e.target.value } })}
-                          disabled={data.department === 'deck'}
-                          className={`appearance-none bg-transparent border-none p-0 pr-4 text-[9px] sm:text-[10px] font-black uppercase tracking-wider sm:tracking-[0.2em] focus:ring-0 focus:outline-none cursor-pointer w-full truncate ${theme === 'dark' ? 'text-[#4DE8E8]' : 'text-[#00A8A8]'} ${data.department === 'deck' ? 'cursor-default' : ''}`}
-                        >
-                          {situations.map(s => (
-                            <option key={s} value={s} className="bg-[#0A192F] text-white">{s}</option>
-                          ))}
-                        </select>
-                        <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                          <ChevronRight size={10} className="rotate-90" />
-                        </div>
-                      </div>
+                      <span className="text-[7.5px] font-bold text-slate-400 uppercase tracking-wider">
+                        • Current Status
+                      </span>
                     </div>
                   </div>
                 </div>
               )}
 
               {card.type === 'voyage-info' && (
-                <div className={`${theme === 'dark' ? 'bg-[#0A192F]/80 border-white/10' : 'bg-white border-[#0A3161]/10'} backdrop-blur-md p-3.5 sm:p-5 rounded-2xl sm:rounded-[28px] shadow-xl border h-full transition-all hover:translate-y-[-2px] col-span-2`}>
-                  <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
-                    <div className={`p-1.5 sm:p-2 rounded-lg sm:rounded-xl ${theme === 'dark' ? 'bg-white/5 text-[#4DE8E8]' : 'bg-[#0A3161]/5 text-[#0A3161]'}`}>
-                      <Navigation size={16} className="sm:w-[18px] sm:h-[18px]" />
+                <div className={`${theme === 'dark' ? 'bg-[#0A192F]/80 border-white/10' : 'bg-white border-[#0A3161]/10'} backdrop-blur-md p-3.5 sm:p-5 rounded-2xl sm:rounded-[28px] shadow-xl border h-full w-full transition-all hover:translate-y-[-2px] space-y-3.5 sm:space-y-4 relative overflow-hidden`}>
+                  {/* Subtle decorative glow */}
+                  <div className="absolute top-0 right-0 w-40 h-40 bg-[#00A8A8]/5 rounded-full blur-3xl pointer-events-none -mr-16 -mt-16" />
+
+                  {/* Header with Title and Current Stage Status */}
+                  <div className="flex items-center justify-between relative z-10">
+                    <div className="flex items-center gap-2 sm:gap-2.5">
+                      <div className={`p-1.5 sm:p-2 rounded-lg sm:rounded-xl ${theme === 'dark' ? 'bg-white/5 text-[#4DE8E8] border border-white/10' : 'bg-[#0A3161]/5 text-[#0A3161] border border-[#0A3161]/10'}`}>
+                        <Ship size={16} className="sm:w-[18px] sm:h-[18px] text-[#4DE8E8]" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5 sm:gap-2">
+                          <span className={`text-[10px] sm:text-xs font-black tracking-wider uppercase ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>{card.title}</span>
+                          <span className="px-1.5 py-0.5 rounded-full text-[7.5px] sm:text-[8px] font-black uppercase tracking-wider bg-[#00A8A8]/10 text-[#00A8A8] border border-[#00A8A8]/20">
+                            Voy #{data.voyageStatus.voyageNumber || '001'}
+                          </span>
+                        </div>
+                        <span className="text-[7.5px] sm:text-[8px] font-medium text-slate-400 block -mt-0.5">Maritime Voyage Timeline & Status</span>
+                      </div>
                     </div>
-                    <span className="text-[8px] sm:text-[9px] font-black text-slate-400 uppercase tracking-wider sm:tracking-[0.2em]">{card.title}</span>
+
+                    <div className={`px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full flex items-center gap-1.5 border ${theme === 'dark' ? 'bg-[#050B15]/80 border-white/10' : 'bg-slate-50 border-slate-200'}`}>
+                      <span className="relative flex h-1.5 w-1.5 sm:h-2 sm:w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#4DE8E8] opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 sm:h-2 sm:w-2 bg-[#00A8A8]"></span>
+                      </span>
+                      <span className={`text-[7.5px] sm:text-[8.5px] font-black uppercase tracking-wider ${theme === 'dark' ? 'text-[#4DE8E8]' : 'text-[#0A3161]'}`}>
+                        {currentWaypoint.sub}
+                      </span>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
-                    <div className="space-y-1 min-w-0">
-                      <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest block truncate">Voyage No.</span>
-                      <input 
-                        type="text" 
-                        value={data.voyageStatus.voyageNumber}
-                        onChange={(e) => setData({ ...data, voyageStatus: { ...data.voyageStatus, voyageNumber: e.target.value } })}
-                        disabled={data.department === 'deck'}
-                        className={`bg-transparent border-none p-0 text-sm sm:text-lg font-black focus:ring-0 focus:outline-none w-full ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'} ${data.department === 'deck' ? 'cursor-default' : ''}`}
-                        placeholder="001"
+
+                  {/* Voyage Timeline Track (Iconography matching uploaded sketch) */}
+                  <div className={`p-3 sm:p-4 rounded-xl sm:rounded-2xl border ${theme === 'dark' ? 'bg-[#050B15]/70 border-white/5' : 'bg-slate-50/80 border-slate-200/80'} relative pt-12 sm:pt-14 pb-4 select-none`}>
+                    
+                    {/* Sliding Boat Icon */}
+                    <motion.div 
+                      className="absolute top-1 sm:top-1.5 -translate-x-1/2 pointer-events-none z-20 flex flex-col items-center"
+                      animate={{ left: `${currentWaypoint.percent}%` }}
+                      transition={{ type: "spring", stiffness: 220, damping: 24 }}
+                    >
+                      <motion.div
+                        animate={{ y: [0, -2.5, 0], rotate: [-1, 1, -1] }}
+                        transition={{ repeat: Infinity, duration: 3.2, ease: "easeInOut" }}
+                        className="filter drop-shadow-[0_4px_10px_rgba(77,232,232,0.6)]"
+                      >
+                        <VoyageVesselIcon theme={theme} className="w-8 h-8 sm:w-9 sm:h-9" />
+                      </motion.div>
+                      {/* Vessel beacon indicator dot touching the track line */}
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#4DE8E8] shadow-[0_0_8px_#4DE8E8] -mt-0.5" />
+                    </motion.div>
+
+                    {/* Track Line with Markers */}
+                    <div className="relative w-full my-3">
+                      {/* Base Track Line */}
+                      <div className={`h-1 w-full rounded-full ${theme === 'dark' ? 'bg-white/10' : 'bg-slate-200'}`} />
+
+                      {/* Active Progress Track Line */}
+                      <motion.div 
+                        className="absolute top-0 left-0 h-1 rounded-full bg-gradient-to-r from-[#00A8A8] to-[#4DE8E8] shadow-[0_0_10px_rgba(77,232,232,0.5)]"
+                        animate={{ width: `${currentWaypoint.percent}%` }}
+                        transition={{ type: "spring", stiffness: 220, damping: 24 }}
                       />
+
+                      {/* Waypoints along the line */}
+                      {VOYAGE_WAYPOINTS.map((wp) => {
+                        const isActive = wp.id === currentWaypoint.id;
+                        const isPast = wp.percent <= currentWaypoint.percent;
+
+                        return (
+                          <div
+                            key={wp.id}
+                            style={{ left: `${wp.percent}%` }}
+                            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 group/wp transition-all z-10 flex flex-col items-center pointer-events-none select-none cursor-default"
+                          >
+                            {/* Waypoint Marker Iconography */}
+                            {wp.type === 'dot' ? (
+                              <div className={`w-3.5 h-3.5 rounded-full border-2 transition-all flex items-center justify-center ${
+                                isActive 
+                                  ? 'bg-[#4DE8E8] border-white shadow-[0_0_12px_#4DE8E8] scale-125' 
+                                  : isPast 
+                                    ? 'bg-[#00A8A8] border-[#4DE8E8]' 
+                                    : theme === 'dark' ? 'bg-[#0A192F] border-slate-500' : 'bg-white border-slate-300'
+                              }`}>
+                                <div className={`w-1 h-1 rounded-full ${isActive ? 'bg-[#0A192F]' : 'bg-white'}`} />
+                              </div>
+                            ) : wp.type === 'noon-dot' ? (
+                              <div className={`w-4 h-4 rounded-full border-2 transition-all flex items-center justify-center ${
+                                isActive 
+                                  ? 'bg-[#4DE8E8] border-white shadow-[0_0_14px_#4DE8E8] scale-125' 
+                                  : isPast 
+                                    ? 'bg-[#00A8A8] border-[#4DE8E8]' 
+                                    : theme === 'dark' ? 'bg-[#0A192F] border-slate-500' : 'bg-white border-slate-300'
+                              }`}>
+                                <Sun size={9} className={isActive ? 'text-[#0A192F]' : isPast ? 'text-white' : 'text-slate-400'} />
+                              </div>
+                            ) : wp.type === 'tick' ? (
+                              <div className={`w-1 h-3.5 sm:h-4 rounded-full transition-all ${
+                                isActive 
+                                  ? 'bg-[#4DE8E8] shadow-[0_0_10px_#4DE8E8] scale-125' 
+                                  : isPast 
+                                    ? 'bg-[#00A8A8]' 
+                                    : theme === 'dark' ? 'bg-slate-600' : 'bg-slate-300'
+                              }`} />
+                            ) : (
+                              /* Intermediate subtick (COSP / EOSP) */
+                              <div className={`w-0.5 h-2.5 rounded-full transition-all ${
+                                isActive 
+                                  ? 'bg-[#4DE8E8] shadow-[0_0_8px_#4DE8E8]' 
+                                  : isPast 
+                                    ? 'bg-[#00A8A8]/70' 
+                                    : theme === 'dark' ? 'bg-slate-700' : 'bg-slate-300'
+                              }`} />
+                            )}
+
+                            {/* Label underneath */}
+                            <div className="mt-2 text-center whitespace-nowrap">
+                              <span className={`block text-[8.5px] sm:text-[9.5px] font-black uppercase tracking-wider transition-colors ${
+                                isActive 
+                                  ? 'text-[#4DE8E8] font-black scale-105' 
+                                  : isPast 
+                                    ? theme === 'dark' ? 'text-slate-300' : 'text-slate-700' 
+                                    : 'text-slate-500'
+                              }`}>
+                                {wp.label}
+                              </span>
+                              {wp.subText && (
+                                <span className={`text-[7px] sm:text-[7.5px] font-bold block -mt-0.5 max-w-[48px] sm:max-w-[65px] truncate ${
+                                  isActive ? 'text-[#00A8A8]' : 'text-slate-400'
+                                }`}>
+                                  {wp.subText}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <div className="space-y-1 min-w-0">
-                      <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest block truncate">Departure Port</span>
-                      <input 
-                        type="text" 
-                        value={data.voyageStatus.portOfDeparture}
-                        onChange={(e) => setData({ ...data, voyageStatus: { ...data.voyageStatus, portOfDeparture: e.target.value } })}
-                        disabled={data.department === 'deck'}
-                        className={`bg-transparent border-none p-0 text-sm sm:text-lg font-black focus:ring-0 focus:outline-none w-full truncate ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'} ${data.department === 'deck' ? 'cursor-default' : ''}`}
-                        placeholder="SINGAPORE"
-                      />
+
+                    <div className="mt-6 flex items-center justify-between text-[7px] sm:text-[8px] text-slate-500 font-bold uppercase tracking-wider px-1">
+                      <span>• Vessel Position: {currentWaypoint.sub}</span>
+                      <span className="text-[#00A8A8]">• Synced with Latest Situation</span>
+                    </div>
+                  </div>
+
+                  {/* Voyage Ports & Voyage No. Status (Read-only) */}
+                  <div className="grid grid-cols-3 gap-2 sm:gap-2.5 pt-0.5">
+                    <div className={`p-2 rounded-xl border ${theme === 'dark' ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-100'} space-y-0.5 min-w-0`}>
+                      <span className="text-[7.5px] sm:text-[8px] font-black text-slate-400 uppercase tracking-widest block truncate">Voyage No.</span>
+                      <div className={`text-xs sm:text-sm font-black truncate ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>
+                        {data.voyageStatus.voyageNumber || '001'}
+                      </div>
+                    </div>
+                    <div className={`p-2 rounded-xl border ${theme === 'dark' ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-100'} space-y-0.5 min-w-0`}>
+                      <span className="text-[7.5px] sm:text-[8px] font-black text-slate-400 uppercase tracking-widest block truncate">Departure</span>
+                      <div className={`text-xs sm:text-sm font-black truncate ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>
+                        {data.voyageStatus.portOfDeparture || 'SINGAPORE'}
+                      </div>
+                    </div>
+                    <div className={`p-2 rounded-xl border ${theme === 'dark' ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-100'} space-y-0.5 min-w-0`}>
+                      <span className="text-[7.5px] sm:text-[8px] font-black text-slate-400 uppercase tracking-widest block truncate">Destination</span>
+                      <div className={`text-xs sm:text-sm font-black truncate ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>
+                        {data.voyageStatus.destinationPort || 'ROTTERDAM'}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -928,53 +1228,71 @@ const Dashboard = ({ data, setData, onOpenSettings, theme, isSyncing, isOffline,
                           <Plus size={10} className="sm:w-3 sm:h-3" />
                           Record Bunker
                         </button>
+                        {onNavigateToReport && (
+                          <button 
+                            onClick={onNavigateToReport}
+                            className="flex items-center gap-1 sm:gap-1.5 text-[7px] sm:text-[8px] font-black text-[#00A8A8] bg-[#00A8A8]/10 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full border border-[#00A8A8]/20 uppercase tracking-widest hover:bg-[#00A8A8]/20 transition-all"
+                          >
+                            <FileText size={10} className="sm:w-3 sm:h-3" />
+                            Daily Report
+                          </button>
+                        )}
                         {data.department !== 'deck' && (
                           <button 
-                            onClick={() => onOpenSettings('settings-fuel')}
+                            onClick={() => onOpenSettings('settings-oil')}
                             className="flex items-center gap-1 sm:gap-1.5 text-[7px] sm:text-[8px] font-black text-[#00A8A8] uppercase tracking-widest hover:opacity-80 transition-opacity"
                           >
                             <Settings2 size={10} className="sm:w-3 sm:h-3" />
-                            Manage
+                            Manage Oils
                           </button>
                         )}
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2.5 sm:gap-6">
-                      <div className="space-y-2 sm:space-y-3">
-                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider sm:tracking-[0.2em] block">Fuel ROB</span>
-                        <div className="grid grid-cols-1 gap-1.5 sm:gap-2">
-                          {data.fuelTypes.map(fuel => {
-                            const robValue = fuel.rob;
-                            return (
-                              <div key={fuel.id} className={`flex justify-between items-center p-2.5 sm:p-3 rounded-xl sm:rounded-2xl ${theme === 'dark' ? 'bg-white/5' : 'bg-slate-50'}`}>
-                                <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest truncate mr-1`} style={{ color: getFuelColor(fuel.type) }}>{fuel.type}</span>
-                                <span className={`text-xs sm:text-sm font-black whitespace-nowrap ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>{robValue} <span className="text-[8px] sm:text-[9px] text-slate-400">MT</span></span>
-                              </div>
-                            );
-                          })}
-                        </div>
+                    
+                    {/* Oil ROB Inventory Cards */}
+                    <div className="space-y-2 sm:space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider sm:tracking-[0.2em] block">Lubricating Oil ROB (Stock in Liters)</span>
+                        <span className="text-[7.5px] font-bold text-orange-400 uppercase tracking-widest">Live Tank Telemetry</span>
                       </div>
-                      <div className="space-y-2 sm:space-y-3">
-                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider sm:tracking-[0.2em] block">Oil ROB</span>
-                        <div className="grid grid-cols-1 gap-1.5 sm:gap-2">
-                          {data.oilTypes.map(oil => {
-                            const robValue = oil.rob;
-                            return (
-                              <div key={oil.id} className={`flex justify-between items-center p-2.5 sm:p-3 rounded-xl sm:rounded-2xl ${theme === 'dark' ? 'bg-white/5' : 'bg-slate-50'}`}>
-                                <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest truncate mr-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>{oil.name.split(' ').pop()}</span>
-                                <span className={`text-xs sm:text-sm font-black whitespace-nowrap ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>{robValue} <span className="text-[8px] sm:text-[9px] text-slate-400">L</span></span>
+                      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                        {data.oilTypes.map(oil => {
+                          const robValue = oil.rob;
+                          const robNum = parseFloat(robValue) || 0;
+                          const capNum = parseFloat(oil.capacity) || 0;
+                          const thresh = parseFloat(oil.threshold) || 0;
+                          const pct = capNum > 0 ? (robNum / capNum) * 100 : 100;
+                          const isCritical15 = capNum > 0 && pct < 15;
+                          const isLow = (thresh > 0 && robNum <= thresh) || isCritical15;
+                          return (
+                            <div key={oil.id} className={`p-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border transition-all ${
+                              isCritical15 
+                                ? 'bg-red-500/10 border-red-500/40 shadow-[0_0_15px_rgba(239,68,68,0.2)]' 
+                                : theme === 'dark' ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-100'
+                            } flex flex-col justify-between`}>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[8.5px] sm:text-[9.5px] font-black uppercase tracking-wider text-orange-400 truncate mr-1">{oil.name}</span>
+                                {isCritical15 ? (
+                                  <span className="text-[6.5px] font-black text-red-400 bg-red-400/20 px-1 py-0.5 rounded border border-red-500/30 animate-pulse">&lt;15%</span>
+                                ) : isLow ? (
+                                  <span className="text-[6.5px] font-black text-red-400 bg-red-400/10 px-1 py-0.5 rounded">LOW</span>
+                                ) : null}
                               </div>
-                            );
-                          })}
-                        </div>
+                              <div className="flex items-baseline justify-between mt-1">
+                                <span className={`text-sm sm:text-base font-black ${isCritical15 ? 'text-red-400' : theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>{robValue}</span>
+                                <span className="text-[7.5px] sm:text-[8.5px] text-slate-400 font-bold ml-1">L</span>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
 
-                  {/* Consumption Details Rearranged */}
+                  {/* Consumption Details */}
                   <div className="space-y-3 sm:space-y-4">
                     <div className="flex items-center justify-between">
-                      <span className="text-[8px] sm:text-[9px] font-black text-slate-400 uppercase tracking-wider sm:tracking-[0.3em] block">Consumption Details</span>
+                      <span className="text-[8px] sm:text-[9px] font-black text-slate-400 uppercase tracking-wider sm:tracking-[0.3em] block">Machinery Consumption Details</span>
                       <button 
                         onClick={() => onOpenSettings('settings-machinery')}
                         className="flex items-center gap-1 sm:gap-1.5 text-[7px] sm:text-[8px] font-black text-[#00A8A8] uppercase tracking-widest hover:opacity-80 transition-opacity"
@@ -992,17 +1310,9 @@ const Dashboard = ({ data, setData, onOpenSettings, theme, isSyncing, isOffline,
                           <div className="flex-1 min-w-0">
                             <span className={`font-black text-[9px] sm:text-[10px] uppercase tracking-tight truncate block ${theme === 'dark' ? 'text-slate-200' : 'text-slate-700'}`}>{m.name}</span>
                             <div className="flex flex-wrap gap-x-3 sm:gap-x-4 gap-y-0.5 sm:gap-y-1 mt-0.5 sm:mt-1">
-                              {data.fuelTypes.map(f => (
-                                <div key={f.id} className="flex items-center gap-1">
-                                  <span className="text-[7px] sm:text-[8px] font-bold text-slate-500 uppercase">{f.type}:</span>
-                                  <span className={`text-[9px] sm:text-[10px] font-black ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>
-                                    {getLastReportValue(m.name, f.type)} <span className="text-[7px] opacity-60">MT</span>
-                                  </span>
-                                </div>
-                              ))}
-                              {data.oilTypes.map(o => (
+                              {data.oilTypes.filter(o => m.usedOils.includes(o.id)).map(o => (
                                 <div key={o.id} className="flex items-center gap-1">
-                                  <span className="text-[7px] sm:text-[8px] font-bold text-slate-500 uppercase">{o.name.split(' ').pop()}:</span>
+                                  <span className="text-[7px] sm:text-[8px] font-bold text-orange-400 uppercase">{o.name}:</span>
                                   <span className={`text-[9px] sm:text-[10px] font-black ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>
                                     {getLastReportValue(m.name, o.name)} <span className="text-[7px] opacity-60">L</span>
                                   </span>
@@ -1644,10 +1954,62 @@ const LOView = ({ data, setData, onOpenSettings, theme, onSubmit }: { data: Onbo
   );
 };
 
-const ReportView = ({ data, setData, onOpenSettings, theme }: { data: OnboardingData, setData: React.Dispatch<React.SetStateAction<OnboardingData>>, onOpenSettings: (section?: string) => void, theme: 'dark' | 'light' }) => {
+const ReportView = ({ 
+  data, 
+  setData, 
+  onOpenSettings, 
+  theme,
+  setShowBunkerModal
+}: { 
+  data: OnboardingData, 
+  setData: React.Dispatch<React.SetStateAction<OnboardingData>>, 
+  onOpenSettings: (section?: string) => void, 
+  theme: 'dark' | 'light',
+  setShowBunkerModal?: (show: boolean) => void
+}) => {
+  const [activeSubTab, setActiveSubTab] = useState<'entry' | 'history'>('entry');
+  
+  // Mixed Event / Situation & Consumption Form State
+  const [reportDate, setReportDate] = useState(data.voyageStatus.date || new Date().toISOString().split('T')[0]);
+  const [reportTime, setReportTime] = useState(data.voyageStatus.time || "12:00");
+  const [reportSituation, setReportSituation] = useState(data.voyageStatus.situation || 'Noon');
+  const [voyageNum, setVoyageNum] = useState(data.voyageStatus.voyageNumber || '001');
+  const [depPort, setDepPort] = useState(data.voyageStatus.portOfDeparture || 'SINGAPORE');
+  const [destPort, setDestPort] = useState(data.voyageStatus.destinationPort || 'ROTTERDAM');
+  const [selectedStage, setSelectedStage] = useState(data.voyageStatus.voyageStage || 'noon');
+  const [eventRemarks, setEventRemarks] = useState('');
+  
+  // Fuel inputs: [machineryId]: { [fuelId]: string }
+  const [fuelInputs, setFuelInputs] = useState<Record<string, Record<string, string>>>(() => {
+    return data.fuelConsumptionData || {};
+  });
+  
+  // Running hours: [machineryId]: string
+  const [machineryHours, setMachineryHours] = useState<Record<string, string>>(() => {
+    return data.machineryHours || {};
+  });
+
+  // Oil inputs: [machineryId]: { [oilId]: string }
+  const [oilInputs, setOilInputs] = useState<Record<string, Record<string, string>>>(() => {
+    return data.oilConsumptionData || {};
+  });
+
+  // Active fuel grade filter in entry view
+  const [selectedFuelFilter, setSelectedFuelFilter] = useState<string>('all');
+
+  // Success / notification banner
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // History filtering & search
+  const [historyFilter, setHistoryFilter] = useState<string>('ALL');
+  const [historySearch, setHistorySearch] = useState<string>('');
+
+  // Editing existing event
   const [editingEvent, setEditingEvent] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Record<string, string>>({});
 
+  // Ensure ROB is fresh
   useEffect(() => {
     const newData = recalculateRob(data);
     if (JSON.stringify(newData.consumptionLogs) !== JSON.stringify(data.consumptionLogs) || 
@@ -1656,6 +2018,311 @@ const ReportView = ({ data, setData, onOpenSettings, theme }: { data: Onboarding
       setData(newData);
     }
   }, []);
+
+  const situationIcons: Record<string, React.ReactNode> = {
+    'Noon': <Sun size={13} />,
+    'Standby': <Clock size={13} />,
+    'FWE': <XCircle size={13} />,
+    'COSP': <Navigation size={13} />,
+    'EOSP': <Flag size={13} />,
+    'Departure': <Ship size={13} />,
+    'Alongside': <Layout size={13} />,
+    'Anchor': <Anchor size={13} />,
+    'Unknown': <Activity size={13} />
+  };
+
+  const situations = ['Noon', 'Standby', 'FWE', 'COSP', 'EOSP', 'Departure', 'Alongside', 'Anchor'];
+
+  const EDITABLE_WAYPOINTS = [
+    { id: 'port-dep', label: 'port', sub: 'Departure Port', percent: 6, type: 'dot', defaultSituation: 'Departure', subText: depPort || 'SIN' },
+    { id: 'anchor-dep', label: 'anchor', sub: 'Departure Anchor', percent: 21, type: 'tick', defaultSituation: 'Anchor', subText: '' },
+    { id: 'sea-1', label: 'COSP', sub: 'COSP (Commence Sea Passage)', percent: 36, type: 'subtick', defaultSituation: 'COSP', subText: '' },
+    { id: 'noon', label: 'Noon', sub: 'Noon Report (12:00 Reset)', percent: 50, type: 'noon-dot', defaultSituation: 'Noon', subText: '' },
+    { id: 'sea-2', label: 'EOSP', sub: 'EOSP (End of Sea Passage)', percent: 64, type: 'subtick', defaultSituation: 'EOSP', subText: '' },
+    { id: 'anchor-arr', label: 'anchor', sub: 'Arrival Anchor', percent: 79, type: 'tick', defaultSituation: 'Anchor', subText: '' },
+    { id: 'port-arr', label: 'port', sub: 'Destination Port', percent: 94, type: 'dot', defaultSituation: 'FWE', subText: destPort || 'RTM' },
+  ];
+
+  const currentEditableWaypoint = EDITABLE_WAYPOINTS.find(w => w.id === selectedStage) || EDITABLE_WAYPOINTS[3];
+
+  const handleSaveSituation = () => {
+    const now = Date.now();
+    const timestamp = `${reportDate}T${reportTime}:00`;
+
+    let stage = selectedStage;
+    if (reportSituation === 'Noon') stage = 'noon';
+    else if (reportSituation === 'COSP') stage = 'sea-1';
+    else if (reportSituation === 'EOSP') stage = 'sea-2';
+    else if (reportSituation === 'FWE') stage = 'port-arr';
+    else if (reportSituation === 'Departure' || reportSituation === 'Alongside') stage = 'port-dep';
+    else if (reportSituation === 'Anchor') {
+      if (stage !== 'anchor-arr' && stage !== 'anchor-dep') stage = 'anchor-dep';
+    }
+
+    const newLog: ConsumptionLog = {
+      id: uuidv4(),
+      timestamp,
+      machineryName: 'Vessel Situation Update',
+      type: 'STATUS',
+      value: '0',
+      unit: 'LOG',
+      situation: reportSituation,
+      hoursRun: '0',
+      oilRobSnapshot: data.oilTypes.reduce((acc, o) => ({ ...acc, [o.id]: o.rob }), {}),
+      fuelRobSnapshot: data.fuelTypes.reduce((acc, f) => ({ ...acc, [f.id]: f.rob }), {}),
+      lastModified: now
+    };
+
+    const updatedData = recalculateRob({
+      ...data,
+      voyageStatus: {
+        ...data.voyageStatus,
+        date: reportDate,
+        time: reportTime,
+        situation: reportSituation,
+        voyageStage: stage,
+        voyageNumber: voyageNum,
+        portOfDeparture: depPort,
+        destinationPort: destPort
+      },
+      consumptionLogs: [...data.consumptionLogs, newLog],
+      lastModified: now
+    });
+
+    setData(updatedData);
+    setSubmitSuccess(`Vessel situation updated to "${reportSituation}" at ${reportTime} hrs! Synced with Dashboard.`);
+    setEventRemarks('');
+  };
+
+  const getFuelColor = (type: string) => {
+    const upperType = type.toUpperCase();
+    if (upperType.includes('FO')) return '#FF4D4D';
+    if (upperType.includes('DO')) return '#FF80BF';
+    return '#4DE8E8';
+  };
+
+  // Deduplicated unique machinery list
+  const uniqueMachinery = useMemo(() => {
+    return data.machinery.reduce((acc, m) => {
+      if (!acc.find(item => item.name === m.name)) acc.push(m);
+      return acc;
+    }, [] as MachineryItem[]);
+  }, [data.machinery]);
+
+  // Handle Fuel Input change
+  const handleFuelChange = (machineryId: string, fuelId: string, val: string) => {
+    const m = data.machinery.find(item => item.id === machineryId);
+    const targetName = m?.name || 'Unknown';
+    setFuelInputs(prev => {
+      const next = { ...prev };
+      data.machinery.forEach(item => {
+        if (item.name === targetName) {
+          if (!next[item.id]) next[item.id] = {};
+          next[item.id] = { ...next[item.id], [fuelId]: val };
+        }
+      });
+      return next;
+    });
+  };
+
+  // Handle Hours change
+  const handleHoursChange = (machineryId: string, val: string) => {
+    const m = data.machinery.find(item => item.id === machineryId);
+    const targetName = m?.name || 'Unknown';
+    setMachineryHours(prev => {
+      const next = { ...prev };
+      data.machinery.forEach(item => {
+        if (item.name === targetName) {
+          next[item.id] = val;
+        }
+      });
+      return next;
+    });
+  };
+
+  // Handle Oil Input change
+  const handleOilChange = (machineryId: string, oilId: string, val: string) => {
+    const m = data.machinery.find(item => item.id === machineryId);
+    const targetName = m?.name || 'Unknown';
+    setOilInputs(prev => {
+      const next = { ...prev };
+      data.machinery.forEach(item => {
+        if (item.name === targetName) {
+          if (!next[item.id]) next[item.id] = {};
+          next[item.id] = { ...next[item.id], [oilId]: val };
+        }
+      });
+      return next;
+    });
+  };
+
+  // Calculate entry totals
+  const totalFuelConsEntered = useMemo(() => {
+    let sum = 0;
+    uniqueMachinery.forEach(m => {
+      data.fuelTypes.forEach(f => {
+        const val = parseFloat(fuelInputs[m.id]?.[f.id] || '0') || 0;
+        sum += val;
+      });
+    });
+    return sum;
+  }, [fuelInputs, uniqueMachinery, data.fuelTypes]);
+
+  const totalOilConsEntered = useMemo(() => {
+    let sum = 0;
+    uniqueMachinery.forEach(m => {
+      data.oilTypes.forEach(o => {
+        const val = parseFloat(oilInputs[m.id]?.[o.id] || '0') || 0;
+        sum += val;
+      });
+    });
+    return sum;
+  }, [oilInputs, uniqueMachinery, data.oilTypes]);
+
+  // Submit Daily Report
+  const handleSubmitReport = () => {
+    const timestamp = `${reportDate}T${reportTime}:00`;
+    const newLogs: ConsumptionLog[] = [];
+    const now = Date.now();
+
+    // Snapshot current ROBs before this entry
+    const fuelRobSnapshot = data.fuelTypes.reduce((acc, f) => ({ ...acc, [f.id]: f.rob }), {} as Record<string, string>);
+    const oilRobSnapshot = data.oilTypes.reduce((acc, o) => ({ ...acc, [o.id]: o.rob }), {} as Record<string, string>);
+
+    // Add fuel logs
+    uniqueMachinery.forEach(m => {
+      const hours = machineryHours[m.id] || '';
+      data.fuelTypes.forEach(f => {
+        const val = fuelInputs[m.id]?.[f.id] || '';
+        if (parseFloat(val) > 0) {
+          newLogs.push({
+            id: uuidv4(),
+            timestamp,
+            machineryName: m.name,
+            type: f.type,
+            value: val,
+            unit: 'MT',
+            hoursRun: hours,
+            situation: reportSituation,
+            fuelRobSnapshot,
+            oilRobSnapshot,
+            lastModified: now
+          });
+        }
+      });
+    });
+
+    // Add oil logs
+    uniqueMachinery.forEach(m => {
+      const hours = machineryHours[m.id] || '';
+      data.oilTypes.forEach(o => {
+        const val = oilInputs[m.id]?.[o.id] || '';
+        if (parseFloat(val) > 0) {
+          newLogs.push({
+            id: uuidv4(),
+            timestamp,
+            machineryName: m.name,
+            type: o.name,
+            value: val,
+            unit: 'L',
+            hoursRun: hours,
+            situation: reportSituation,
+            fuelRobSnapshot,
+            oilRobSnapshot,
+            lastModified: now
+          });
+        }
+      });
+    });
+
+    if (newLogs.length === 0) {
+      newLogs.push({
+        id: uuidv4(),
+        timestamp,
+        machineryName: 'Vessel Operations',
+        type: data.fuelTypes[0]?.type || 'FO',
+        value: '0.00',
+        unit: 'MT',
+        situation: reportSituation,
+        fuelRobSnapshot,
+        oilRobSnapshot,
+        lastModified: now
+      });
+    }
+
+    // Determine voyage stage to sync with timeline
+    let newStage = data.voyageStatus.voyageStage;
+    if (reportSituation === 'Noon') newStage = 'noon';
+    else if (reportSituation === 'Anchor') {
+      if (newStage !== 'anchor-arr' && newStage !== 'anchor-dep') newStage = 'anchor-dep';
+    }
+    else if (reportSituation === 'COSP') newStage = 'sea-1';
+    else if (reportSituation === 'EOSP') newStage = 'sea-2';
+    else if (reportSituation === 'FWE') newStage = 'port-arr';
+    else if (reportSituation === 'Departure' || reportSituation === 'Alongside') newStage = 'port-dep';
+
+    const updatedData = recalculateRob({
+      ...data,
+      voyageStatus: {
+        ...data.voyageStatus,
+        date: reportDate,
+        time: reportTime,
+        situation: reportSituation,
+        voyageStage: newStage,
+        voyageNumber: voyageNum,
+        portOfDeparture: depPort,
+        destinationPort: destPort
+      },
+      consumptionLogs: [...data.consumptionLogs, ...newLogs],
+      fuelConsumptionData: {},
+      oilConsumptionData: {},
+      machineryHours: {},
+      lastModified: now
+    });
+
+    setData(updatedData);
+    setFuelInputs({});
+    setOilInputs({});
+    setMachineryHours({});
+    setSubmitSuccess(`Report for ${reportSituation} (${reportDate} ${reportTime}) recorded and logged successfully!`);
+    setActiveSubTab('history');
+  };
+
+  // Group logs by timestamp and situation
+  const groupedByEvent = useMemo(() => {
+    return data.consumptionLogs.reduce((acc, log) => {
+      const eventKey = `${log.timestamp}|${log.situation || 'Unknown'}`;
+      if (!acc[eventKey]) acc[eventKey] = [];
+      acc[eventKey].push(log);
+      return acc;
+    }, {} as Record<string, typeof data.consumptionLogs>);
+  }, [data.consumptionLogs]);
+
+  // Sort events descending
+  const sortedEventKeys = useMemo(() => {
+    return Object.keys(groupedByEvent).sort((a, b) => {
+      const [timeA] = a.split('|');
+      const [timeB] = b.split('|');
+      return new Date(timeB).getTime() - new Date(timeA).getTime();
+    });
+  }, [groupedByEvent]);
+
+  // Filtered keys
+  const filteredEventKeys = useMemo(() => {
+    return sortedEventKeys.filter(key => {
+      const [timestamp, situation] = key.split('|');
+      if (historyFilter !== 'ALL' && situation.toUpperCase() !== historyFilter.toUpperCase()) {
+        return false;
+      }
+      if (historySearch.trim()) {
+        const query = historySearch.toLowerCase();
+        if (!timestamp.toLowerCase().includes(query) && !situation.toLowerCase().includes(query)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [sortedEventKeys, historyFilter, historySearch]);
 
   const removeEvent = (eventKey: string) => {
     const [timestamp, situation] = eventKey.split('|');
@@ -1685,206 +2352,940 @@ const ReportView = ({ data, setData, onOpenSettings, theme }: { data: Onboarding
     setEditingEvent(null);
   };
 
-  // Group logs by timestamp and situation
-  const groupedByEvent = data.consumptionLogs.reduce((acc, log) => {
-    const eventKey = `${log.timestamp}|${log.situation || 'Unknown'}`;
-    if (!acc[eventKey]) acc[eventKey] = [];
-    acc[eventKey].push(log);
-    return acc;
-  }, {} as Record<string, typeof data.consumptionLogs>);
+  // Format Telex Summary for copying
+  const copyTelex = (eventKey: string, logs: any[]) => {
+    const [timestamp, situation] = eventKey.split('|');
+    const dateObj = new Date(timestamp);
+    const formattedDate = dateObj.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    const formattedTime = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-  // Sort events descending
-  const sortedEventKeys = Object.keys(groupedByEvent).sort((a, b) => {
-    const [timeA] = a.split('|');
-    const [timeB] = b.split('|');
-    return new Date(timeB).getTime() - new Date(timeA).getTime();
-  });
+    const fuelRob = logs[logs.length - 1]?.fuelRobSnapshot || {};
+    const oilRob = logs[logs.length - 1]?.oilRobSnapshot || {};
 
-  const situationIcons: Record<string, React.ReactNode> = {
-    'Noon': <Sun size={12} />,
-    'Standby': <Clock size={12} />,
-    'FWE': <XCircle size={12} />,
-    'COSP': <Navigation size={12} />,
-    'EOSP': <Flag size={12} />,
-    'Departure': <Ship size={12} />,
-    'Alongside': <Layout size={12} />,
-    'Anchor': <Anchor size={12} />,
-    'Unknown': <Activity size={12} />
+    const fuelLogs = logs.filter(l => l.unit === 'MT' && parseFloat(l.value) > 0);
+    const oilLogs = logs.filter(l => l.unit === 'L' && parseFloat(l.value) > 0);
+
+    let telex = `========================================\n`;
+    telex += `DAILY REPORT: ${situation.toUpperCase()}\n`;
+    telex += `VESSEL: ${data.vesselName || 'MT Vast coral'} (IMO: ${data.imoNumber || '9392999'})\n`;
+    telex += `VOYAGE: ${data.voyageStatus.voyageNumber || '001'} | ${data.voyageStatus.portOfDeparture || 'SINGAPORE'} -> ${data.voyageStatus.destinationPort || 'ROTTERDAM'}\n`;
+    telex += `DATE/TIME: ${formattedDate} ${formattedTime}\n`;
+    telex += `----------------------------------------\n`;
+    telex += `FUEL CONSUMPTION (MT):\n`;
+    if (fuelLogs.length > 0) {
+      data.fuelTypes.forEach(f => {
+        const items = fuelLogs.filter(l => l.type === f.type);
+        if (items.length > 0) {
+          const subtotal = items.reduce((s, it) => s + (parseFloat(it.value) || 0), 0);
+          telex += ` • ${f.type}: ${subtotal.toFixed(2)} MT [${items.map(it => `${it.machineryName}: ${it.value}`).join(', ')}]\n`;
+        }
+      });
+    } else {
+      telex += ` • Nil\n`;
+    }
+
+    telex += `LUBE OIL CONSUMPTION (L):\n`;
+    if (oilLogs.length > 0) {
+      data.oilTypes.forEach(o => {
+        const items = oilLogs.filter(l => l.type === o.name);
+        if (items.length > 0) {
+          const subtotal = items.reduce((s, it) => s + (parseFloat(it.value) || 0), 0);
+          telex += ` • ${o.name}: ${subtotal.toFixed(0)} L [${items.map(it => `${it.machineryName}: ${it.value}L`).join(', ')}]\n`;
+        }
+      });
+    } else {
+      telex += ` • Nil\n`;
+    }
+
+    telex += `----------------------------------------\n`;
+    telex += `ROB AFTER REPORT:\n`;
+    data.fuelTypes.forEach(f => {
+      telex += ` • ${f.type}: ${fuelRob[f.id] || f.rob} MT\n`;
+    });
+    data.oilTypes.forEach(o => {
+      telex += ` • ${o.name}: ${oilRob[o.id] || o.rob} L\n`;
+    });
+    telex += `========================================`;
+
+    navigator.clipboard.writeText(telex);
+    setCopiedKey(eventKey);
+    setTimeout(() => setCopiedKey(null), 2500);
   };
 
   return (
     <div className={`pb-28 sm:pb-32 min-h-screen ${theme === 'dark' ? 'bg-[#050B15]' : 'bg-[#F8FAFC]'}`}>
+      {/* Header */}
       <header className={`${theme === 'dark' ? 'bg-[#0A192F] border-white/10' : 'bg-[#0A3161] border-white/10'} text-white p-4 sm:p-6 pt-8 sm:pt-12 rounded-b-3xl sm:rounded-b-[40px] shadow-2xl border-b relative overflow-hidden`}>
         <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl -mr-32 -mt-32" />
         <div className="flex items-center justify-between mb-4 relative z-10">
           <div className="flex items-center gap-2.5 sm:gap-3">
-            <div className="bg-white/10 p-2 rounded-xl backdrop-blur-md border border-white/10">
-              <FileText size={20} className="text-[#4DE8E8] sm:w-6 sm:h-6" strokeWidth={2.5} />
+            <div className="bg-white/10 p-2 sm:p-2.5 rounded-xl sm:rounded-2xl backdrop-blur-md border border-white/10">
+              <FileText size={22} className="text-[#4DE8E8] sm:w-6 sm:h-6" strokeWidth={2.5} />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-black tracking-tighter italic uppercase text-white leading-none">REPORTS</h1>
-              <p className="text-[#4DE8E8] text-[8px] sm:text-[9px] font-bold tracking-[0.3em] sm:tracking-[0.4em] uppercase opacity-80 mt-1">Performance Logs</p>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl sm:text-2xl font-black tracking-tighter italic uppercase text-white leading-none">DAILY ENTRY</h1>
+                <span className="text-[7.5px] sm:text-[8px] font-black uppercase tracking-wider bg-[#00A8A8]/20 text-[#4DE8E8] px-2 py-0.5 rounded-full border border-[#00A8A8]/30">
+                  EVENT / SITUATION
+                </span>
+              </div>
+              <p className="text-[#4DE8E8] text-[8px] sm:text-[9px] font-bold tracking-[0.2em] sm:tracking-[0.25em] uppercase opacity-80 mt-1">
+                {data.vesselName || 'MT Vast coral'} • Reset Time: 12:00 LT (Noon)
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {setShowBunkerModal && (
+              <button 
+                onClick={() => setShowBunkerModal(true)}
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#4DE8E8]/30 bg-[#4DE8E8]/10 text-[#4DE8E8] text-[9px] font-black uppercase tracking-wider hover:bg-[#4DE8E8]/20 transition-all"
+              >
+                <Plus size={12} />
+                Bunker
+              </button>
+            )}
             <button 
               onClick={() => onOpenSettings()}
               className="p-2 sm:p-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
+              title="Settings"
             >
               <Settings2 size={18} className="text-[#4DE8E8] sm:w-5 sm:h-5" />
             </button>
           </div>
         </div>
+
+        {/* Sub-Tab Navigation Bar */}
+        <div className="grid grid-cols-2 gap-2 mt-4 relative z-10 p-1 bg-black/20 backdrop-blur-md rounded-2xl border border-white/10">
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('entry')}
+            className={`flex items-center justify-center gap-2 py-2 sm:py-2.5 px-3 rounded-xl font-black text-[10px] sm:text-xs uppercase tracking-wider transition-all ${
+              activeSubTab === 'entry'
+                ? 'bg-gradient-to-r from-[#00A8A8] to-[#4DE8E8] text-[#0A192F] shadow-lg shadow-cyan-500/20'
+                : 'text-slate-300 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <PenTool size={13} />
+            <span className="truncate">Daily Entry (Event & Consumption)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('history')}
+            className={`flex items-center justify-center gap-2 py-2 sm:py-2.5 px-3 rounded-xl font-black text-[10px] sm:text-xs uppercase tracking-wider transition-all relative ${
+              activeSubTab === 'history'
+                ? 'bg-gradient-to-r from-[#00A8A8] to-[#4DE8E8] text-[#0A192F] shadow-lg shadow-cyan-500/20'
+                : 'text-slate-300 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <ClipboardList size={13} />
+            <span className="truncate">Situation Logs & History</span>
+            {sortedEventKeys.length > 0 && (
+              <span className={`text-[8px] font-black px-1.5 py-0.2 rounded-full ${
+                activeSubTab === 'history' ? 'bg-[#0A192F] text-[#4DE8E8]' : 'bg-white/20 text-white'
+              }`}>
+                {sortedEventKeys.length}
+              </span>
+            )}
+          </button>
+        </div>
       </header>
-      <main className="p-4 sm:p-6 space-y-4 sm:space-y-8 relative z-10 max-w-md mx-auto">
+
+      {/* Main Content Area */}
+      <main className="p-4 sm:p-6 space-y-4 sm:space-y-6 relative z-10 max-w-md mx-auto">
         <div className="absolute inset-0 pointer-events-none opacity-[0.03]" 
              style={{ backgroundImage: `radial-gradient(${theme === 'dark' ? '#fff' : '#0A3161'} 1px, transparent 1px)`, backgroundSize: '24px 24px' }} />
-        
-        {sortedEventKeys.length > 0 ? (
-          sortedEventKeys.map(eventKey => {
-            const logs = groupedByEvent[eventKey];
-            const [timestamp, situation] = eventKey.split('|');
-            const dateObj = new Date(timestamp);
-            const formattedDate = dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-            const formattedTime = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        {/* Success Alert Banner */}
+        <AnimatePresence>
+          {submitSuccess && (
+            <motion.div 
+              initial={{ opacity: 0, y: -10 }} 
+              animate={{ opacity: 1, y: 0 }} 
+              exit={{ opacity: 0, y: -10 }}
+              className="p-3.5 sm:p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-between gap-3 shadow-lg"
+            >
+              <div className="flex items-center gap-2.5 text-xs font-black">
+                <CheckCircle size={18} className="shrink-0 text-emerald-400" />
+                <span>{submitSuccess}</span>
+              </div>
+              <button 
+                onClick={() => setSubmitSuccess(null)}
+                className="text-emerald-400/70 hover:text-emerald-400 p-1"
+              >
+                <X size={14} />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ============================================================== */}
+        {/* UNIFIED DAILY ENTRY FORM (EVENT / SITUATION + CONSUMPTION)      */}
+        {/* ============================================================== */}
+        {activeSubTab === 'entry' && (
+          <div className="space-y-4 sm:space-y-6">
             
-            // Get ROB snapshots from the last log in the group (ROB After)
-            const fuelRob = logs[logs.length - 1].fuelRobSnapshot || {};
-            const oilRob = logs[logs.length - 1].oilRobSnapshot || {};
-
-            return (
-              <div key={eventKey} className={`${theme === 'dark' ? 'bg-[#0A192F]/80 border-white/10' : 'bg-white border-[#0A3161]/10'} backdrop-blur-md rounded-2xl sm:rounded-[32px] border shadow-2xl overflow-hidden`}>
-                {/* Group Header */}
-                <div className={`p-4 sm:p-6 border-b ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-100'} flex items-center justify-between`}>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2.5 sm:gap-4 mb-1">
-                      <div className="flex items-center gap-1.5 sm:gap-2">
-                        <Calendar size={13} className="text-[#00A8A8] sm:w-3.5 sm:h-3.5" />
-                        <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-[0.15em] sm:tracking-[0.2em] ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>{formattedDate}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 sm:gap-2">
-                        <Clock size={13} className="text-slate-400 sm:w-3.5 sm:h-3.5" />
-                        <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.15em] sm:tracking-[0.2em] text-slate-400">{formattedTime}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5 sm:gap-2 text-orange-400">
-                      {situationIcons[situation]}
-                      <span className="text-xs sm:text-sm font-black uppercase tracking-wider sm:tracking-widest">{situation}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    {data.department !== 'deck' && (
-                      <>
-                        {editingEvent === eventKey ? (
-                          <button 
-                            onClick={saveEdit}
-                            className="p-1.5 sm:p-2 bg-green-500/10 text-green-500 rounded-xl hover:bg-green-500/20 transition-all"
-                          >
-                            <Check size={16} className="sm:w-[18px] sm:h-[18px]" />
-                          </button>
-                        ) : (
-                          <button 
-                            onClick={() => startEditing(eventKey, logs)}
-                            className="p-2 sm:p-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all"
-                          >
-                            <Edit2 size={16} className="text-[#4DE8E8] sm:w-[18px] sm:h-[18px]" />
-                          </button>
-                        )}
-                        <button 
-                          onClick={() => removeEvent(eventKey)}
-                          className="p-1.5 sm:p-2 bg-red-500/10 text-red-500 rounded-xl hover:bg-red-500/20 transition-all"
-                        >
-                          <Trash2 size={16} className="sm:w-[18px] sm:h-[18px]" />
-                        </button>
-                      </>
-                    )}
-                  </div>
+            {/* 1. EVENT / SITUATION & VOYAGE STATUS (EDITABLE) */}
+            <div className={`${theme === 'dark' ? 'bg-[#0A192F]/80 border-white/10' : 'bg-white border-[#0A3161]/10'} backdrop-blur-md p-4 sm:p-6 rounded-2xl sm:rounded-[28px] shadow-2xl border space-y-4 sm:space-y-5`}>
+              
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/5 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#4DE8E8] animate-ping" />
+                  <span className={`text-[11px] sm:text-xs font-black uppercase tracking-wider ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>
+                    EVENT / SITUATION & VOYAGE
+                  </span>
                 </div>
-
-                {/* ROB Summary in Report */}
-                <div className="p-4 sm:p-6 grid grid-cols-2 gap-2.5 sm:gap-3 border-b border-dashed border-slate-200 dark:border-white/10">
-                  <div className="space-y-1.5 sm:space-y-2">
-                    <span className="text-[7.5px] sm:text-[8px] font-black text-slate-400 uppercase tracking-widest block">Fuel ROB (After)</span>
-                    {data.fuelTypes.map(f => (
-                      <div key={f.id} className="flex justify-between items-center">
-                        <span className={`text-[9px] sm:text-[10px] font-bold ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>{f.type}</span>
-                        <span className={`text-[9px] sm:text-[10px] font-black ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>{fuelRob[f.id] || '0.0'} MT</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="space-y-1.5 sm:space-y-2 border-l border-slate-100 dark:border-white/5 pl-2.5 sm:pl-3">
-                    <span className="text-[7.5px] sm:text-[8px] font-black text-slate-400 uppercase tracking-widest block">Oil ROB (After)</span>
-                    {data.oilTypes.map(o => (
-                      <div key={o.id} className="flex justify-between items-center">
-                        <span className={`text-[9px] sm:text-[10px] font-bold ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>{o.name.split(' ').pop()}</span>
-                        <span className={`text-[9px] sm:text-[10px] font-black ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>{oilRob[o.id] || '0'} L</span>
-                      </div>
-                    ))}
-                  </div>
+                <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#00A8A8]/20 border border-[#00A8A8]/30 text-[#4DE8E8] text-[8px] font-black uppercase tracking-wider">
+                  <span>Current: {reportSituation}</span>
                 </div>
+              </div>
 
-                {/* Consumption Details */}
-                {logs.some(log => parseFloat(log.value) > 0) && (
-                  <div className="p-4 sm:p-6 space-y-2.5 sm:space-y-3">
-                    <span className="text-[7.5px] sm:text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Consumption Details</span>
-                    {Object.entries(logs
-                      .filter(log => parseFloat(log.value) > 0)
-                      .reduce((acc, log) => {
-                        if (!acc[log.type]) acc[log.type] = [];
-                        acc[log.type].push(log);
-                        return acc;
-                      }, {} as Record<string, typeof logs>)).map(([type, typeLogs]) => (
-                      <div key={type} className="space-y-2.5 sm:space-y-3 pt-2 first:pt-0">
-                        <div className="flex items-center gap-2 pb-1 border-b border-slate-100 dark:border-white/5">
-                          <div className={`w-1 h-3 rounded-full ${typeLogs[0].unit === 'MT' ? 'bg-[#00A8A8]' : 'bg-orange-500'}`} />
-                          <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>{type}</span>
+              {/* Event / Situation 8 Buttons Grid matching uploaded sketch/screenshot */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[9px] sm:text-[10px] font-black text-[#4DE8E8] uppercase tracking-widest block">
+                    EVENT / SITUATION
+                  </label>
+                  <span className="text-[7.5px] font-bold text-slate-400 uppercase tracking-wider">
+                    Select Situation
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {situations.map(s => {
+                    const isSelected = reportSituation === s;
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => {
+                          setReportSituation(s);
+                          if (s === 'Noon') setSelectedStage('noon');
+                          else if (s === 'COSP') setSelectedStage('sea-1');
+                          else if (s === 'EOSP') setSelectedStage('sea-2');
+                          else if (s === 'FWE') setSelectedStage('port-arr');
+                          else if (s === 'Departure' || s === 'Alongside') setSelectedStage('port-dep');
+                          else if (s === 'Anchor') setSelectedStage('anchor-dep');
+                        }}
+                        className={`flex flex-col items-center justify-center gap-1.5 p-2.5 sm:p-3 rounded-2xl border transition-all cursor-pointer ${
+                          isSelected 
+                            ? 'bg-[#00A8A8] border-[#4DE8E8] text-[#0A192F] shadow-[0_0_15px_rgba(77,232,232,0.45)] scale-[1.03]' 
+                            : theme === 'dark' 
+                              ? 'bg-[#050B15]/80 border-white/10 text-slate-300 hover:bg-white/10 hover:border-white/20' 
+                              : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        <div className={isSelected ? 'text-[#0A192F]' : 'text-[#4DE8E8]'}>
+                          {React.isValidElement(situationIcons[s]) 
+                            ? React.cloneElement(situationIcons[s] as React.ReactElement<any>, { size: 18 }) 
+                            : situationIcons[s]}
                         </div>
-                        <div className="space-y-1">
-                          {typeLogs.map(log => (
-                            <div key={log.id} className="flex items-center justify-between py-1.5 sm:py-2 pl-2 sm:pl-3">
-                              <div className="flex items-center gap-2.5 sm:gap-3">
-                                <div className={`p-1.5 rounded-lg ${theme === 'dark' ? 'bg-white/5 text-slate-500' : 'bg-slate-50 text-slate-400'}`}>
+                        <span className={`text-[8.5px] sm:text-[9.5px] font-black uppercase tracking-wider ${isSelected ? 'text-[#0A192F]' : ''}`}>{s}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Date & Time Picker */}
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-4 pt-1">
+                <div className="space-y-1.5">
+                  <label className="text-[8px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest">Report Date</label>
+                  <div className={`flex items-center gap-2 p-2.5 sm:p-3 rounded-xl border ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200'}`}>
+                    <Calendar size={14} className="text-[#00A8A8]" />
+                    <input 
+                      type="date" 
+                      value={reportDate}
+                      onChange={(e) => setReportDate(e.target.value)}
+                      className={`bg-transparent border-none p-0 text-[11px] sm:text-xs font-bold focus:ring-0 focus:outline-none cursor-pointer w-full ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[8px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest">Report Time</label>
+                    <button 
+                      type="button" 
+                      onClick={() => setReportTime('12:00')}
+                      className="text-[7.5px] text-[#4DE8E8] font-black uppercase hover:underline"
+                    >
+                      Noon (12:00)
+                    </button>
+                  </div>
+                  <div className={`flex items-center gap-2 p-2.5 sm:p-3 rounded-xl border ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200'}`}>
+                    <Clock size={14} className="text-[#00A8A8]" />
+                    <input 
+                      type="time" 
+                      value={reportTime}
+                      onChange={(e) => setReportTime(e.target.value)}
+                      className={`bg-transparent border-none p-0 text-[11px] sm:text-xs font-bold focus:ring-0 focus:outline-none cursor-pointer w-full ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Editable Voyage Ports & Voyage No. */}
+              <div className="grid grid-cols-3 gap-2 sm:gap-2.5 pt-1">
+                <div className={`p-2.5 rounded-xl border ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200'} space-y-1`}>
+                  <span className="text-[7.5px] sm:text-[8px] font-black text-slate-400 uppercase tracking-widest block truncate">Voyage No.</span>
+                  <input 
+                    type="text" 
+                    value={voyageNum}
+                    onChange={(e) => setVoyageNum(e.target.value)}
+                    className={`bg-transparent border-none p-0 text-xs sm:text-sm font-black focus:ring-0 focus:outline-none w-full ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}
+                    placeholder="001"
+                  />
+                </div>
+                <div className={`p-2.5 rounded-xl border ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200'} space-y-1`}>
+                  <span className="text-[7.5px] sm:text-[8px] font-black text-slate-400 uppercase tracking-widest block truncate">Departure</span>
+                  <input 
+                    type="text" 
+                    value={depPort}
+                    onChange={(e) => setDepPort(e.target.value)}
+                    className={`bg-transparent border-none p-0 text-xs sm:text-sm font-black focus:ring-0 focus:outline-none w-full truncate ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}
+                    placeholder="SINGAPORE"
+                  />
+                </div>
+                <div className={`p-2.5 rounded-xl border ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-200'} space-y-1`}>
+                  <span className="text-[7.5px] sm:text-[8px] font-black text-slate-400 uppercase tracking-widest block truncate">Destination</span>
+                  <input 
+                    type="text" 
+                    value={destPort}
+                    onChange={(e) => setDestPort(e.target.value)}
+                    className={`bg-transparent border-none p-0 text-xs sm:text-sm font-black focus:ring-0 focus:outline-none w-full truncate ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}
+                    placeholder="ROTTERDAM"
+                  />
+                </div>
+              </div>
+
+              {/* Interactive Timeline Track */}
+              <div className={`p-3 sm:p-4 rounded-xl sm:rounded-2xl border ${theme === 'dark' ? 'bg-[#050B15]/70 border-white/5' : 'bg-slate-50/80 border-slate-200/80'} relative pt-12 sm:pt-14 pb-4 select-none`}>
+                <motion.div 
+                  className="absolute top-1 sm:top-1.5 -translate-x-1/2 pointer-events-none z-20 flex flex-col items-center"
+                  animate={{ left: `${currentEditableWaypoint.percent}%` }}
+                  transition={{ type: "spring", stiffness: 220, damping: 24 }}
+                >
+                  <motion.div
+                    animate={{ y: [0, -2.5, 0], rotate: [-1, 1, -1] }}
+                    transition={{ repeat: Infinity, duration: 3.2, ease: "easeInOut" }}
+                    className="filter drop-shadow-[0_4px_10px_rgba(77,232,232,0.6)]"
+                  >
+                    <VoyageVesselIcon theme={theme} className="w-8 h-8 sm:w-9 sm:h-9" />
+                  </motion.div>
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#4DE8E8] shadow-[0_0_8px_#4DE8E8] -mt-0.5" />
+                </motion.div>
+
+                <div className="relative w-full my-3">
+                  <div className={`h-1 w-full rounded-full ${theme === 'dark' ? 'bg-white/10' : 'bg-slate-200'}`} />
+                  <motion.div 
+                    className="absolute top-0 left-0 h-1 rounded-full bg-gradient-to-r from-[#00A8A8] to-[#4DE8E8] shadow-[0_0_10px_rgba(77,232,232,0.5)]"
+                    animate={{ width: `${currentEditableWaypoint.percent}%` }}
+                    transition={{ type: "spring", stiffness: 220, damping: 24 }}
+                  />
+
+                  {EDITABLE_WAYPOINTS.map((wp) => {
+                    const isActive = wp.id === currentEditableWaypoint.id;
+                    const isPast = wp.percent <= currentEditableWaypoint.percent;
+                    return (
+                      <button
+                        key={wp.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedStage(wp.id);
+                          if (wp.defaultSituation) setReportSituation(wp.defaultSituation);
+                        }}
+                        style={{ left: `${wp.percent}%` }}
+                        className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 group/wp focus:outline-none transition-all z-10 flex flex-col items-center cursor-pointer"
+                      >
+                        {wp.type === 'dot' ? (
+                          <div className={`w-3.5 h-3.5 rounded-full border-2 transition-all flex items-center justify-center ${
+                            isActive 
+                              ? 'bg-[#4DE8E8] border-white shadow-[0_0_12px_#4DE8E8] scale-125' 
+                              : isPast 
+                                ? 'bg-[#00A8A8] border-[#4DE8E8]' 
+                                : theme === 'dark' ? 'bg-[#0A192F] border-slate-500 hover:border-slate-300' : 'bg-white border-slate-300 hover:border-slate-500'
+                          }`}>
+                            <div className={`w-1 h-1 rounded-full ${isActive ? 'bg-[#0A192F]' : 'bg-white'}`} />
+                          </div>
+                        ) : wp.type === 'noon-dot' ? (
+                          <div className={`w-4 h-4 rounded-full border-2 transition-all flex items-center justify-center ${
+                            isActive 
+                              ? 'bg-[#4DE8E8] border-white shadow-[0_0_14px_#4DE8E8] scale-125' 
+                              : isPast 
+                                ? 'bg-[#00A8A8] border-[#4DE8E8]' 
+                                : theme === 'dark' ? 'bg-[#0A192F] border-slate-500 hover:border-slate-300' : 'bg-white border-slate-300 hover:border-slate-500'
+                          }`}>
+                            <Sun size={9} className={isActive ? 'text-[#0A192F]' : isPast ? 'text-white' : 'text-slate-400'} />
+                          </div>
+                        ) : wp.type === 'tick' ? (
+                          <div className={`w-1 h-3.5 sm:h-4 rounded-full transition-all ${
+                            isActive 
+                              ? 'bg-[#4DE8E8] shadow-[0_0_10px_#4DE8E8] scale-125' 
+                              : isPast 
+                                ? 'bg-[#00A8A8]' 
+                                : theme === 'dark' ? 'bg-slate-600 hover:bg-slate-400' : 'bg-slate-300 hover:bg-slate-400'
+                          }`} />
+                        ) : (
+                          <div className={`w-0.5 h-2.5 rounded-full transition-all ${
+                            isActive 
+                              ? 'bg-[#4DE8E8] shadow-[0_0_8px_#4DE8E8]' 
+                              : isPast 
+                                ? 'bg-[#00A8A8]/70' 
+                                : theme === 'dark' ? 'bg-slate-700 hover:bg-slate-500' : 'bg-slate-300 hover:bg-slate-400'
+                          }`} />
+                        )}
+                        <div className="mt-2 text-center whitespace-nowrap">
+                          <span className={`block text-[8.5px] sm:text-[9.5px] font-black uppercase tracking-wider transition-colors ${
+                            isActive 
+                              ? 'text-[#4DE8E8] font-black scale-105' 
+                              : isPast 
+                                ? theme === 'dark' ? 'text-slate-300' : 'text-slate-700' 
+                                : 'text-slate-500'
+                          }`}>
+                            {wp.label}
+                          </span>
+                          {wp.subText && (
+                            <span className={`text-[7px] sm:text-[7.5px] font-bold block -mt-0.5 max-w-[48px] sm:max-w-[65px] truncate ${
+                              isActive ? 'text-[#00A8A8]' : 'text-slate-400'
+                            }`}>
+                              {wp.subText}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-6 flex items-center justify-between text-[7px] sm:text-[8px] text-slate-500 font-bold uppercase tracking-wider px-1">
+                  <span>• Tap waypoint to change vessel position</span>
+                  <button
+                    type="button"
+                    onClick={handleSaveSituation}
+                    className="text-[#4DE8E8] font-black hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <Save size={10} />
+                    <span>Save Situation Only</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick ROB Live Status Bar */}
+            <div className={`${theme === 'dark' ? 'bg-[#0A192F]/80 border-white/10' : 'bg-white border-[#0A3161]/10'} backdrop-blur-md p-3.5 sm:p-5 rounded-2xl sm:rounded-[28px] shadow-xl border space-y-3`}>
+              <div className="flex items-center justify-between">
+                <span className="text-[8px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest block">Current ROB (Live)</span>
+                {setShowBunkerModal && (
+                  <button 
+                    onClick={() => setShowBunkerModal(true)}
+                    className="text-[7.5px] sm:text-[8px] font-black text-[#4DE8E8] uppercase tracking-wider hover:underline"
+                  >
+                    + Bunker
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {data.fuelTypes.map(f => (
+                  <div key={f.id} className={`p-2 rounded-xl border ${theme === 'dark' ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-100'} flex items-center justify-between`}>
+                    <span className="text-[9px] font-black uppercase" style={{ color: getFuelColor(f.type) }}>{f.type}</span>
+                    <span className={`text-xs font-black ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>{f.rob} <span className="text-[7px] text-slate-400">MT</span></span>
+                  </div>
+                ))}
+                {data.oilTypes.slice(0, 2).map(o => (
+                  <div key={o.id} className={`p-2 rounded-xl border ${theme === 'dark' ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-100'} flex items-center justify-between`}>
+                    <span className="text-[8.5px] font-bold text-orange-400 uppercase truncate mr-1">{o.name.split(' ').pop()}</span>
+                    <span className={`text-xs font-black ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>{o.rob} <span className="text-[7px] text-slate-400">L</span></span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* SECTION 1: FUEL CONSUMPTION (FO & DO) */}
+            <div className={`${theme === 'dark' ? 'bg-[#0A192F]/80 border-white/10' : 'bg-white border-[#0A3161]/10'} backdrop-blur-md p-4 sm:p-6 rounded-2xl sm:rounded-[28px] shadow-2xl border space-y-4`}>
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/5 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-[#00A8A8]/10 text-[#00A8A8]">
+                    <Fuel size={18} />
+                  </div>
+                  <div>
+                    <h3 className={`font-black text-xs sm:text-sm tracking-wider uppercase ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>
+                      Fuel Oil & Diesel Oil
+                    </h3>
+                    <p className="text-[7.5px] sm:text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+                      Machinery Consumption in Metric Tons (MT)
+                    </p>
+                  </div>
+                </div>
+                {totalFuelConsEntered > 0 && (
+                  <span className="text-[9px] sm:text-[10px] font-black px-2 py-0.5 rounded-full bg-[#00A8A8]/10 text-[#4DE8E8] border border-[#00A8A8]/30">
+                    {totalFuelConsEntered.toFixed(2)} MT Total
+                  </span>
+                )}
+              </div>
+
+              {/* Machinery with Fuels - EXACT MATCH TO LUBRICATING OILS (LO) */}
+              <div className="space-y-3">
+                {uniqueMachinery.map(m => {
+                  const currentHrs = machineryHours[m.id] || '';
+
+                  return (
+                    <div 
+                      key={m.id}
+                      className={`p-3.5 sm:p-4 rounded-2xl border space-y-2.5 ${
+                        theme === 'dark' ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-100'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className={`p-1.5 rounded-lg text-[#00A8A8] ${theme === 'dark' ? 'bg-white/5' : 'bg-white'}`}>
+                            {getIcon(m.icon)}
+                          </div>
+                          <span className={`text-[10px] sm:text-xs font-black uppercase ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>
+                            {m.name}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 bg-black/10 dark:bg-white/5 rounded-lg px-2 py-0.5 border border-white/5">
+                          <Clock size={11} className="text-slate-400" />
+                          <span className="text-[7.5px] font-bold text-slate-400 uppercase">RUN:</span>
+                          <input 
+                            type="number"
+                            step="0.1"
+                            value={currentHrs}
+                            onChange={(e) => handleHoursChange(m.id, e.target.value)}
+                            placeholder="0.0"
+                            className={`w-10 bg-transparent text-right font-black text-[10px] focus:outline-none ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}
+                          />
+                          <span className="text-[7.5px] font-bold text-slate-400">hrs</span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-2">
+                        {data.fuelTypes.map(f => {
+                          const currentVal = fuelInputs[m.id]?.[f.id] || '';
+                          const robNum = parseFloat(f.rob) || 0;
+                          const capNum = parseFloat(f.capacity) || 0;
+                          const pct = capNum > 0 ? (robNum / capNum) * 100 : 100;
+                          const isLow = (capNum > 0 && pct < 15) || robNum <= 0;
+                          const fColor = getFuelColor(f.type);
+
+                          return (
+                            <div 
+                              key={f.id}
+                              className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${
+                                theme === 'dark' ? 'bg-[#0A192F]/60 border-white/5' : 'bg-white border-slate-200/70'
+                              }`}
+                            >
+                              <div>
+                                <span className="text-[9px] sm:text-[10px] font-black uppercase block" style={{ color: fColor }}>
+                                  {f.type}
+                                </span>
+                                <div className="flex items-center gap-2 text-[7.5px] font-bold text-slate-400">
+                                  <span>ROB: {f.rob} MT</span>
+                                  {isLow && (
+                                    <span className="text-red-400 font-black animate-pulse">LOW LEVEL ALERT</span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 bg-black/10 dark:bg-white/5 rounded-lg px-2.5 py-1 border border-white/5">
+                                <input 
+                                  type="number"
+                                  step="0.01"
+                                  value={currentVal}
+                                  onChange={(e) => handleFuelChange(m.id, f.id, e.target.value)}
+                                  placeholder="0.00"
+                                  className={`w-14 sm:w-16 bg-transparent text-right font-black text-xs sm:text-sm focus:outline-none ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}
+                                />
+                                <span className="text-[7.5px] font-black text-slate-400">MT</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* SECTION 2: LUBRICATING OILS (LO) CONSUMPTION */}
+            <div className={`${theme === 'dark' ? 'bg-[#0A192F]/80 border-white/10' : 'bg-white border-[#0A3161]/10'} backdrop-blur-md p-4 sm:p-6 rounded-2xl sm:rounded-[28px] shadow-2xl border space-y-4`}>
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-white/5 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-orange-500/10 text-orange-400">
+                    <Droplets size={18} />
+                  </div>
+                  <div>
+                    <h3 className={`font-black text-xs sm:text-sm tracking-wider uppercase ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>
+                      Lubricating Oils (LO)
+                    </h3>
+                    <p className="text-[7.5px] sm:text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+                      Machinery Consumption in Liters (L)
+                    </p>
+                  </div>
+                </div>
+                {totalOilConsEntered > 0 && (
+                  <span className="text-[9px] sm:text-[10px] font-black px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/30">
+                    {totalOilConsEntered.toFixed(0)} L Total
+                  </span>
+                )}
+              </div>
+
+              {/* Machinery with used oils */}
+              <div className="space-y-3">
+                {uniqueMachinery.map(m => {
+                  const associatedOils = data.oilTypes.filter(o => m.usedOils.includes(o.id));
+                  if (associatedOils.length === 0) return null;
+
+                  return (
+                    <div 
+                      key={m.id}
+                      className={`p-3.5 sm:p-4 rounded-2xl border space-y-2.5 ${
+                        theme === 'dark' ? 'bg-white/5 border-white/5' : 'bg-slate-50 border-slate-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className={`p-1.5 rounded-lg text-orange-400 ${theme === 'dark' ? 'bg-white/5' : 'bg-white'}`}>
+                          {getIcon(m.icon)}
+                        </div>
+                        <span className={`text-[10px] sm:text-xs font-black uppercase ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>
+                          {m.name}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-2">
+                        {associatedOils.map(o => {
+                          const currentOilVal = oilInputs[m.id]?.[o.id] || '';
+                          const robNum = parseFloat(o.rob) || 0;
+                          const threshNum = parseFloat(o.threshold) || 0;
+                          const isLow = robNum <= threshNum && threshNum > 0;
+
+                          return (
+                            <div 
+                              key={o.id}
+                              className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${
+                                theme === 'dark' ? 'bg-[#0A192F]/60 border-white/5' : 'bg-white border-slate-200/70'
+                              }`}
+                            >
+                              <div>
+                                <span className="text-[9px] sm:text-[10px] font-black uppercase text-orange-400 block">
+                                  {o.name}
+                                </span>
+                                <div className="flex items-center gap-2 text-[7.5px] font-bold text-slate-400">
+                                  <span>ROB: {o.rob} L</span>
+                                  {isLow && (
+                                    <span className="text-red-400 font-black">LOW LEVEL ALERT</span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 bg-black/10 dark:bg-white/5 rounded-lg px-2.5 py-1 border border-white/5">
+                                <input 
+                                  type="number"
+                                  step="1"
+                                  value={currentOilVal}
+                                  onChange={(e) => handleOilChange(m.id, o.id, e.target.value)}
+                                  placeholder="0"
+                                  className={`w-14 sm:w-16 bg-transparent text-right font-black text-xs sm:text-sm focus:outline-none ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}
+                                />
+                                <span className="text-[7.5px] font-black text-slate-400">L</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* SECTION 3: SUMMARY & SUBMIT BUTTON */}
+            <div className={`${theme === 'dark' ? 'bg-[#0A192F]/80 border-white/10' : 'bg-white border-[#0A3161]/10'} backdrop-blur-md p-4 sm:p-6 rounded-2xl sm:rounded-[28px] shadow-2xl border space-y-4`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[8px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest block">Entry Summary</span>
+                  <span className={`text-xs sm:text-sm font-black uppercase ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>
+                    {reportSituation} Report • {reportDate} ({reportTime} hrs)
+                  </span>
+                </div>
+                <div className="text-right">
+                  <div className="text-[11px] sm:text-xs font-black text-[#4DE8E8]">
+                    {totalFuelConsEntered.toFixed(2)} MT Fuel
+                  </div>
+                  <div className="text-[10px] sm:text-[11px] font-black text-orange-400">
+                    {totalOilConsEntered.toFixed(0)} L Oil
+                  </div>
+                </div>
+              </div>
+
+              {/* Event Remarks / Operation Log */}
+              <div className="space-y-1.5 pt-1">
+                <label className="text-[8px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest block">
+                  Remarks / Operation Log (Optional)
+                </label>
+                <input 
+                  type="text" 
+                  value={eventRemarks}
+                  onChange={(e) => setEventRemarks(e.target.value)}
+                  placeholder={`e.g. Logged ${reportSituation} at ${reportTime} hrs, all engines normal.`}
+                  className={`w-full p-2.5 sm:p-3 rounded-xl border text-[11px] sm:text-xs font-medium focus:ring-1 focus:ring-[#4DE8E8] focus:outline-none ${
+                    theme === 'dark' ? 'bg-white/5 border-white/10 text-white placeholder:text-slate-500' : 'bg-slate-50 border-slate-200 text-[#0A3161] placeholder:text-slate-400'
+                  }`}
+                />
+              </div>
+
+              <button 
+                type="button"
+                onClick={handleSubmitReport}
+                className="w-full bg-gradient-to-r from-[#00A8A8] via-[#00C4C4] to-[#4DE8E8] text-[#0A192F] py-3.5 sm:py-4 rounded-xl sm:rounded-2xl font-black text-xs sm:text-sm uppercase tracking-[0.2em] shadow-xl shadow-cyan-500/20 active:scale-95 transition-all flex items-center justify-center gap-2.5 cursor-pointer hover:opacity-95"
+              >
+                <CheckCircle size={18} />
+                SUBMIT DAILY REPORT (EVENT & CONSUMPTION)
+              </button>
+
+              <div className="flex items-center justify-between text-[7.5px] sm:text-[8px] font-bold text-slate-400 uppercase tracking-wider px-1">
+                <span>• Updates situation & syncs dashboard</span>
+                <span>• Deducts from ROB automatically</span>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* SUB-TAB: REPORT HISTORY & LOGS                                */}
+        {/* ============================================================== */}
+        {activeSubTab === 'history' && (
+          <div className="space-y-4 sm:space-y-5">
+            
+            {/* Filter and Search Bar */}
+            <div className={`${theme === 'dark' ? 'bg-[#0A192F]/80 border-white/10' : 'bg-white border-[#0A3161]/10'} backdrop-blur-md p-3.5 sm:p-4 rounded-2xl border space-y-3`}>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="text" 
+                  value={historySearch}
+                  onChange={(e) => setHistorySearch(e.target.value)}
+                  placeholder="Search by date or situation..."
+                  className={`flex-1 bg-black/10 dark:bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-[#00A8A8] ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}
+                />
+                {historySearch && (
+                  <button 
+                    onClick={() => setHistorySearch('')}
+                    className="p-2 text-slate-400 hover:text-white"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              {/* Situation Filter Chips */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                {['ALL', 'Noon', 'Departure', 'FWE', 'Anchor', 'COSP'].map(filt => (
+                  <button
+                    key={filt}
+                    type="button"
+                    onClick={() => setHistoryFilter(filt)}
+                    className={`px-2.5 py-1 rounded-lg text-[8px] sm:text-[9px] font-black uppercase tracking-wider shrink-0 transition-all ${
+                      historyFilter === filt
+                        ? 'bg-[#00A8A8] text-[#0A192F] shadow-sm'
+                        : theme === 'dark' ? 'bg-white/5 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {filt}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Reports List */}
+            {filteredEventKeys.length > 0 ? (
+              filteredEventKeys.map(eventKey => {
+                const logs = groupedByEvent[eventKey] || [];
+                const [timestamp, situation] = eventKey.split('|');
+                const dateObj = new Date(timestamp);
+                const formattedDate = dateObj.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+                const formattedTime = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                
+                const fuelRob = logs[logs.length - 1]?.fuelRobSnapshot || {};
+                const oilRob = logs[logs.length - 1]?.oilRobSnapshot || {};
+
+                const totalEventFuel = logs
+                  .filter(l => l.unit === 'MT')
+                  .reduce((sum, l) => sum + (parseFloat(l.value) || 0), 0);
+                const totalEventOil = logs
+                  .filter(l => l.unit === 'L')
+                  .reduce((sum, l) => sum + (parseFloat(l.value) || 0), 0);
+
+                const isCopied = copiedKey === eventKey;
+
+                return (
+                  <div key={eventKey} className={`${theme === 'dark' ? 'bg-[#0A192F]/80 border-white/10' : 'bg-white border-[#0A3161]/10'} backdrop-blur-md rounded-2xl sm:rounded-[32px] border shadow-2xl overflow-hidden transition-all hover:border-[#00A8A8]/30`}>
+                    
+                    {/* Event Header */}
+                    <div className={`p-4 sm:p-5 border-b ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-slate-50 border-slate-100'} flex items-center justify-between`}>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2.5 mb-1">
+                          <div className="flex items-center gap-1.5">
+                            <Calendar size={13} className="text-[#00A8A8]" />
+                            <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>
+                              {formattedDate}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Clock size={12} className="text-slate-400" />
+                            <span className="text-[9px] sm:text-[10px] font-black uppercase text-slate-400">{formattedTime}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-orange-400">
+                          {situationIcons[situation] || <Activity size={12} />}
+                          <span className="text-xs sm:text-sm font-black uppercase tracking-wider">{situation} Report</span>
+                        </div>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-1.5">
+                        <button 
+                          onClick={() => copyTelex(eventKey, logs)}
+                          title="Copy Telex Format"
+                          className={`p-2 rounded-xl border transition-all flex items-center gap-1 text-[8px] font-black uppercase ${
+                            isCopied 
+                              ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' 
+                              : 'bg-white/5 border-white/10 text-[#4DE8E8] hover:bg-white/10'
+                          }`}
+                        >
+                          {isCopied ? <CheckCheck size={14} /> : <Copy size={14} />}
+                          <span className="hidden sm:inline">{isCopied ? 'Copied' : 'Telex'}</span>
+                        </button>
+
+                        {data.department !== 'deck' && (
+                          <>
+                            {editingEvent === eventKey ? (
+                              <button 
+                                onClick={saveEdit}
+                                className="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl hover:bg-emerald-500/20 transition-all border border-emerald-500/30"
+                              >
+                                <Check size={14} />
+                              </button>
+                            ) : (
+                              <button 
+                                onClick={() => startEditing(eventKey, logs)}
+                                className="p-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-[#4DE8E8] transition-all"
+                              >
+                                <Edit2 size={14} />
+                              </button>
+                            )}
+                            <button 
+                              onClick={() => removeEvent(eventKey)}
+                              className="p-2 bg-red-500/10 text-red-400 rounded-xl hover:bg-red-500/20 transition-all border border-red-500/20"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Totals & ROB After Snapshot */}
+                    <div className="p-4 sm:p-5 grid grid-cols-2 gap-3 border-b border-dashed border-slate-200 dark:border-white/10">
+                      <div className="space-y-1">
+                        <span className="text-[7.5px] sm:text-[8px] font-black text-slate-400 uppercase tracking-widest block">Fuel ROB (After)</span>
+                        {data.fuelTypes.map(f => (
+                          <div key={f.id} className="flex justify-between items-center text-[9px] sm:text-[10px]">
+                            <span className="font-bold text-slate-400">{f.type}:</span>
+                            <span className={`font-black ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>
+                              {fuelRob[f.id] || f.rob} MT
+                            </span>
+                          </div>
+                        ))}
+                        <div className="pt-1 text-[8px] font-bold text-[#00A8A8]">
+                          Total Cons: {totalEventFuel.toFixed(2)} MT
+                        </div>
+                      </div>
+                      <div className="space-y-1 border-l border-slate-100 dark:border-white/5 pl-3">
+                        <span className="text-[7.5px] sm:text-[8px] font-black text-slate-400 uppercase tracking-widest block">Oil ROB (After)</span>
+                        {data.oilTypes.slice(0, 3).map(o => (
+                          <div key={o.id} className="flex justify-between items-center text-[9px] sm:text-[10px]">
+                            <span className="font-bold text-slate-400">{o.name.split(' ').pop()}:</span>
+                            <span className={`font-black ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>
+                              {oilRob[o.id] || o.rob} L
+                            </span>
+                          </div>
+                        ))}
+                        <div className="pt-1 text-[8px] font-bold text-orange-400">
+                          Total Cons: {totalEventOil.toFixed(0)} L
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Detailed Consumption Rows */}
+                    {logs.some(l => parseFloat(l.value) > 0) && (
+                      <div className="p-4 sm:p-5 space-y-2">
+                        <span className="text-[7.5px] sm:text-[8px] font-black text-slate-400 uppercase tracking-widest block">Machinery Consumption Breakdown</span>
+                        <div className="space-y-1.5">
+                          {logs.filter(l => parseFloat(l.value) > 0).map(log => (
+                            <div key={log.id} className={`p-2 rounded-xl flex items-center justify-between text-xs ${theme === 'dark' ? 'bg-white/5' : 'bg-slate-50'}`}>
+                              <div className="flex items-center gap-2">
+                                <div className={`p-1 rounded-md ${log.unit === 'MT' ? 'text-[#00A8A8]' : 'text-orange-400'}`}>
                                   {log.unit === 'MT' ? <Fuel size={12} /> : <Droplets size={12} />}
                                 </div>
                                 <div>
-                                  <div className={`text-[10px] sm:text-[11px] font-black uppercase ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>{log.machineryName}</div>
-                                  {log.hoursRun && <div className="text-[7.5px] sm:text-[8px] font-bold text-slate-400 uppercase">Running: {log.hoursRun} hrs</div>}
+                                  <span className={`font-black uppercase text-[10px] ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>
+                                    {log.machineryName}
+                                  </span>
+                                  <span className="text-[8px] font-bold text-slate-400 ml-1.5">
+                                    ({log.type})
+                                  </span>
                                 </div>
                               </div>
                               <div className="text-right">
                                 {editingEvent === eventKey ? (
-                                  <div className="flex items-center gap-1.5 sm:gap-2">
-                                    <input 
-                                      type="number"
-                                      value={editValues[log.id] || ''}
-                                      onChange={(e) => setEditValues({ ...editValues, [log.id]: e.target.value })}
-                                      className={`w-14 sm:w-16 bg-transparent border-b border-orange-500 text-right font-black text-xs focus:outline-none ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}
-                                    />
-                                    <span className="text-[9px] sm:text-[10px] font-black text-slate-400">{log.unit}</span>
-                                  </div>
+                                  <input 
+                                    type="number"
+                                    value={editValues[log.id] || ''}
+                                    onChange={(e) => setEditValues({ ...editValues, [log.id]: e.target.value })}
+                                    className={`w-14 bg-transparent border-b border-[#00A8A8] text-right font-black text-xs focus:outline-none ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}
+                                  />
                                 ) : (
-                                  <div className={`text-xs font-black ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>{log.value} {log.unit}</div>
+                                  <span className={`font-black text-xs ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>
+                                    {log.value} {log.unit}
+                                  </span>
                                 )}
                               </div>
                             </div>
                           ))}
                         </div>
                       </div>
-                    ))}
+                    )}
+
                   </div>
-                )}
+                );
+              })
+            ) : (
+              <div className={`${theme === 'dark' ? 'bg-[#0A192F]/80 border-white/10' : 'bg-white border-[#0A3161]/10'} backdrop-blur-md p-6 sm:p-8 rounded-2xl sm:rounded-[32px] shadow-2xl border flex flex-col items-center justify-center py-12 sm:py-16 text-center space-y-3`}>
+                <div className={`p-4 sm:p-6 rounded-2xl sm:rounded-3xl ${theme === 'dark' ? 'bg-white/5 text-slate-600' : 'bg-slate-50 text-slate-400'}`}>
+                  <FileText size={44} strokeWidth={1.5} />
+                </div>
+                <h3 className={`font-black text-lg ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>
+                  {historySearch || historyFilter !== 'ALL' ? 'No Matching Reports' : 'No Reports Submitted Yet'}
+                </h3>
+                <p className="text-slate-500 text-xs max-w-xs leading-relaxed">
+                  Use the Daily Entry tab above to record your Fuel Oil and Lubricating Oil daily consumption and log your noon reports.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHistoryFilter('ALL');
+                    setHistorySearch('');
+                    setActiveSubTab('entry');
+                  }}
+                  className="mt-2 bg-[#00A8A8] text-[#0A192F] px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider"
+                >
+                  Create Daily Report
+                </button>
               </div>
-            );
-          })
-        ) : (
-          <div className={`${theme === 'dark' ? 'bg-[#0A192F]/80 border-white/10' : 'bg-white border-[#0A3161]/10'} backdrop-blur-md p-6 sm:p-8 rounded-2xl sm:rounded-[32px] shadow-2xl border flex flex-col items-center justify-center py-12 sm:py-16 text-center`}>
-            <div className={`p-4 sm:p-6 rounded-2xl sm:rounded-3xl mb-4 sm:mb-6 ${theme === 'dark' ? 'bg-white/5 text-slate-600' : 'bg-slate-50 text-slate-400'}`}>
-              <FileText size={48} className="sm:w-16 sm:h-16" strokeWidth={1.5} />
-            </div>
-            <h3 className={`font-black text-lg sm:text-xl mb-2 sm:mb-3 ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>No Reports Generated</h3>
-            <p className="text-slate-500 text-xs sm:text-sm max-w-[240px] leading-relaxed">Complete your daily bunker and lube oil logs to generate performance analytics.</p>
+            )}
+
           </div>
         )}
+
       </main>
     </div>
   );
@@ -2033,7 +3434,7 @@ const SettingsView = ({
                 dashboardCards: [
                   { id: 'vessel-info', type: 'vessel-info', title: 'Current Assignment', visible: true },
                   { id: 'date', type: 'voyage-date', title: 'Report Date', visible: true },
-                  { id: 'time-status', type: 'voyage-time', title: 'Time & Status', visible: true },
+                  { id: 'time-status', type: 'voyage-time', title: 'Latest Situation', visible: true },
                   { id: 'voyage-info', type: 'voyage-info', title: 'Voyage Info', visible: true },
                   { id: 'last-report', type: 'last-report', title: 'Last Submitted Report', visible: true },
                   { id: 'activity', type: 'activity', title: "Today's Activity", visible: true }
@@ -3314,7 +4715,7 @@ export default function App() {
                       Step 03 / 06
                     </div>
                     <h2 className={`text-2xl sm:text-3xl font-black tracking-tighter italic uppercase ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>Fuel <span className="text-[#00A8A8]">Inventory</span></h2>
-                    <p className="text-slate-500 text-xs sm:text-sm font-medium leading-relaxed">Define ideal consumption for each fuel grade.</p>
+                    <p className="text-slate-500 text-xs sm:text-sm font-medium leading-relaxed">Define initial ROB and storage capacity for each fuel grade.</p>
                   </div>
 
                   <div className="space-y-3 sm:space-y-4">
@@ -3340,33 +4741,18 @@ export default function App() {
                             placeholder="Fuel Type (e.g. LSFO)"
                           />
                         </div>
-                        <div className="space-y-3 sm:space-y-4 relative z-10">
-                          <div className="space-y-1.5 sm:space-y-2">
-                            <label className="text-[9px] font-black tracking-[0.3em] uppercase text-slate-400">IDEAL CONS (MT/DAY)</label>
-                            <input 
-                              type="text" 
-                              value={f.consumption}
-                              onChange={(e) => {
-                                const newFuels = data.fuelTypes.map(item => item.id === f.id ? { ...item, consumption: e.target.value } : item);
-                                setData({ ...data, fuelTypes: newFuels });
-                              }}
-                              placeholder="0"
-                              className={`w-full ${theme === 'dark' ? 'bg-[#050B15] border-white/5 text-white' : 'bg-slate-50 border-slate-100 text-[#0A3161]'} p-3 sm:p-4 rounded-xl sm:rounded-2xl font-black outline-none border-2 focus:border-[#00A8A8] transition-all text-base sm:text-lg`}
-                            />
-                          </div>
-                          <div className="space-y-1.5 sm:space-y-2">
-                            <label className="text-[9px] font-black tracking-[0.3em] uppercase text-slate-400">INITIAL ROB</label>
-                            <input 
-                              type="text" 
-                              value={f.rob}
-                              onChange={(e) => {
-                                const newFuels = data.fuelTypes.map(item => item.id === f.id ? { ...item, rob: e.target.value, initialRob: e.target.value } : item);
-                                setData({ ...data, fuelTypes: newFuels });
-                              }}
-                              placeholder="0"
-                              className={`w-full ${theme === 'dark' ? 'bg-[#050B15] border-white/5 text-white' : 'bg-slate-50 border-slate-100 text-[#0A3161]'} p-3 sm:p-4 rounded-xl sm:rounded-2xl font-black outline-none border-2 focus:border-[#00A8A8] transition-all text-base sm:text-lg`}
-                            />
-                          </div>
+                        <div className="space-y-1.5 sm:space-y-2 relative z-10">
+                          <label className="text-[9px] font-black tracking-[0.3em] uppercase text-slate-400">INITIAL ROB</label>
+                          <input 
+                            type="text" 
+                            value={f.rob}
+                            onChange={(e) => {
+                              const newFuels = data.fuelTypes.map(item => item.id === f.id ? { ...item, rob: e.target.value, initialRob: e.target.value } : item);
+                              setData({ ...data, fuelTypes: newFuels });
+                            }}
+                            placeholder="0"
+                            className={`w-full ${theme === 'dark' ? 'bg-[#050B15] border-white/5 text-white' : 'bg-slate-50 border-slate-100 text-[#0A3161]'} p-3 sm:p-4 rounded-xl sm:rounded-2xl font-black outline-none border-2 focus:border-[#00A8A8] transition-all text-base sm:text-lg`}
+                          />
                         </div>
                         <div className="space-y-1.5 sm:space-y-2 relative z-10">
                           <label className="text-[9px] font-black tracking-[0.3em] uppercase text-[#00A8A8]">What is the total fuel storage capacity of the vessel?</label>
@@ -3412,7 +4798,7 @@ export default function App() {
                       Step 04 / 06
                     </div>
                     <h2 className={`text-2xl sm:text-3xl font-black tracking-tighter italic uppercase ${theme === 'dark' ? 'text-white' : 'text-[#0A3161]'}`}>Lubricating <span className="text-[#00A8A8]">Oils</span></h2>
-                    <p className="text-slate-500 text-xs sm:text-sm font-medium leading-relaxed">Define consumption and minimum levels for lube oils.</p>
+                    <p className="text-slate-500 text-xs sm:text-sm font-medium leading-relaxed">Define initial ROB, storage capacity and minimum levels for lube oils.</p>
                   </div>
 
                   <div className="space-y-3 sm:space-y-4">
@@ -3439,33 +4825,18 @@ export default function App() {
                             <Droplets className="text-orange-400" size={18} />
                           </div>
                         </div>
-                        <div className="space-y-3 sm:space-y-4 relative z-10">
-                          <div className="space-y-1.5 sm:space-y-2">
-                            <label className="text-[9px] font-black tracking-[0.3em] uppercase text-slate-400">IDEAL CONS (L)</label>
-                            <input 
-                              type="text" 
-                              value={o.consumption}
-                              onChange={(e) => {
-                                const newOils = data.oilTypes.map(item => item.id === o.id ? { ...item, consumption: e.target.value } : item);
-                                setData({ ...data, oilTypes: newOils });
-                              }}
-                              placeholder="0"
-                              className={`w-full ${theme === 'dark' ? 'bg-[#050B15] border-white/5 text-white' : 'bg-slate-50 border-slate-100 text-[#0A3161]'} p-3 sm:p-4 rounded-xl sm:rounded-2xl font-black outline-none border-2 focus:border-[#00A8A8] transition-all text-base sm:text-lg`}
-                            />
-                          </div>
-                          <div className="space-y-1.5 sm:space-y-2">
-                            <label className="text-[9px] font-black tracking-[0.3em] uppercase text-slate-400">INITIAL ROB</label>
-                            <input 
-                              type="text" 
-                              value={o.rob}
-                              onChange={(e) => {
-                                const newOils = data.oilTypes.map(item => item.id === o.id ? { ...item, rob: e.target.value, initialRob: e.target.value } : item);
-                                setData({ ...data, oilTypes: newOils });
-                              }}
-                              placeholder="0"
-                              className={`w-full ${theme === 'dark' ? 'bg-[#050B15] border-white/5 text-white' : 'bg-slate-50 border-slate-100 text-[#0A3161]'} p-3 sm:p-4 rounded-xl sm:rounded-2xl font-black outline-none border-2 focus:border-[#00A8A8] transition-all text-base sm:text-lg`}
-                            />
-                          </div>
+                        <div className="space-y-1.5 sm:space-y-2 relative z-10">
+                          <label className="text-[9px] font-black tracking-[0.3em] uppercase text-slate-400">INITIAL ROB</label>
+                          <input 
+                            type="text" 
+                            value={o.rob}
+                            onChange={(e) => {
+                              const newOils = data.oilTypes.map(item => item.id === o.id ? { ...item, rob: e.target.value, initialRob: e.target.value } : item);
+                              setData({ ...data, oilTypes: newOils });
+                            }}
+                            placeholder="0"
+                            className={`w-full ${theme === 'dark' ? 'bg-[#050B15] border-white/5 text-white' : 'bg-slate-50 border-slate-100 text-[#0A3161]'} p-3 sm:p-4 rounded-xl sm:rounded-2xl font-black outline-none border-2 focus:border-[#00A8A8] transition-all text-base sm:text-lg`}
+                          />
                         </div>
                         <div className="space-y-1.5 sm:space-y-2 relative z-10">
                           <label className="text-[9px] font-black tracking-[0.3em] uppercase text-slate-400 text-[#00A8A8]">What is the total oil storage capacity of the vessel?</label>
@@ -3699,68 +5070,30 @@ export default function App() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                 >
-                  {activeTab === 'dashboard' && <Dashboard data={data} setData={setData} onOpenSettings={handleOpenSettings} theme={theme} isSyncing={isSyncing} isOffline={isOffline} lastSynced={lastSynced} setShowBunkerModal={setShowBunkerModal} />}
-                {activeTab.startsWith('fuel-') && (
-                  <FOView 
-                    data={data} 
-                    setData={setData}
-                    onOpenSettings={handleOpenSettings} 
-                    theme={theme} 
-                    fuelType={data.fuelTypes.find(f => `fuel-${f.id}` === activeTab)}
-                    onSubmit={() => {
-                      const currentFuel = data.fuelTypes.find(f => `fuel-${f.id}` === activeTab);
-                      if (currentFuel) {
-                        const now = Date.now();
-
-                        // Clear consumption data for this fuel type
-                        const newFuelCons = { ...data.fuelConsumptionData };
-                        Object.keys(newFuelCons).forEach(mId => {
-                          if (newFuelCons[mId]) {
-                            const { [currentFuel.id]: _, ...rest } = newFuelCons[mId];
-                            newFuelCons[mId] = rest;
-                          }
-                        });
-
-                        // Logs are already created in handleConsumptionChange
-                        setData(recalculateRob({ 
-                          ...data, 
-                          fuelConsumptionData: newFuelCons,
-                          lastModified: now
-                        }));
-
-                        // Navigate to next tab
-                        const currentIndex = data.fuelTypes.findIndex(f => f.id === currentFuel.id);
-                        if (currentIndex < data.fuelTypes.length - 1) {
-                          setActiveTab(`fuel-${data.fuelTypes[currentIndex + 1].id}`);
-                        } else {
-                          setActiveTab('lo');
-                        }
-                      }
-                    }}
-                  />
-                )}
-                {activeTab === 'lo' && (
-                  <LOView 
-                    data={data} 
-                    setData={setData} 
-                    onOpenSettings={handleOpenSettings} 
-                    theme={theme} 
-                    onSubmit={() => {
-                      // Clear oil input data
-                      setData(recalculateRob({ 
-                        ...data, 
-                        oilConsumptionData: {},
-                        lastModified: Date.now()
-                      }));
-
-                      // Navigate to report
-                      setActiveTab('report');
-                    }}
-                  />
-                )}
-                {activeTab === 'report' && <ReportView data={data} setData={setData} onOpenSettings={handleOpenSettings} theme={theme} />}
-              </motion.div>
-              <BottomNav activeTab={activeTab} onTabChange={setActiveTab} theme={theme} data={data} />
+                  {activeTab === 'dashboard' && (
+                    <Dashboard 
+                      data={data} 
+                      setData={setData} 
+                      onOpenSettings={handleOpenSettings} 
+                      theme={theme} 
+                      isSyncing={isSyncing} 
+                      isOffline={isOffline} 
+                      lastSynced={lastSynced} 
+                      setShowBunkerModal={setShowBunkerModal}
+                      onNavigateToReport={() => setActiveTab('daily-entry')}
+                    />
+                  )}
+                  {(activeTab === 'daily-entry' || activeTab === 'report' || activeTab.startsWith('fuel-') || activeTab === 'lo') && (
+                    <ReportView 
+                      data={data} 
+                      setData={setData} 
+                      onOpenSettings={handleOpenSettings} 
+                      theme={theme}
+                      setShowBunkerModal={setShowBunkerModal}
+                    />
+                  )}
+                </motion.div>
+                <BottomNav activeTab={activeTab} onTabChange={setActiveTab} theme={theme} data={data} />
               </>
             )}
           </AnimatePresence>

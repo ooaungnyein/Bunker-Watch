@@ -1,6 +1,6 @@
 {
-  "vesselName": "MT OCEAN STAR",
-  "imoNumber": "9876543",
+  "vesselName": "MT Vast coral",
+  "imoNumber": "9392999",
   "department": "engine",
   "machinery": [
     {
@@ -8,16 +8,21 @@
       "name": "Main Engine (ME)",
       "desc": "Primary propulsion system unit",
       "icon": "me",
-      "usedOils": ["me-sys", "me-cyl"],
-      "lastModified": 1728912000000
+      "usedOils": [
+        "me-sys",
+        "me-cyl"
+      ],
+      "lastModified": 1792101326539
     },
     {
       "id": "ge",
       "name": "Generator Engine (GE)",
       "desc": "Auxiliary power generation units",
       "icon": "ge",
-      "usedOils": ["ge-sys"],
-      "lastModified": 1728912000000
+      "usedOils": [
+        "ge-sys"
+      ],
+      "lastModified": 1792101326539
     },
     {
       "id": "blr",
@@ -25,82 +30,198 @@
       "desc": "Steam generation system",
       "icon": "blr",
       "usedOils": [],
-      "lastModified": 1728912000000
+      "lastModified": 1792101326539
     }
   ],
   "fuelTypes": [
     {
-      "id": "fo",
-      "type": "FO",
+      "id": "vlsfo",
+      "type": "VLSFO",
       "consumption": "24.5",
       "capacity": "1200",
-      "rob": "850.2",
-      "initialRob": "850.2",
-      "lastModified": 1728912000000
+      "rob": "840.5",
+      "initialRob": "850.0",
+      "lastModified": 1792101326539
     },
     {
-      "id": "do",
-      "type": "DO",
-      "consumption": "2.8",
+      "id": "lsmgo",
+      "type": "LSMGO",
+      "consumption": "3.2",
       "capacity": "350",
-      "rob": "180.5",
-      "initialRob": "180.5",
-      "lastModified": 1728912000000
+      "rob": "165.2",
+      "initialRob": "170.0",
+      "lastModified": 1792101326539
     }
   ],
   "oilTypes": [
     {
       "id": "me-sys",
       "name": "ME SYS",
-      "consumption": "85",
-      "threshold": "200",
-      "capacity": "3000",
-      "rob": "1850",
-      "initialRob": "1850",
-      "lastModified": 1728912000000
+      "consumption": "",
+      "threshold": "",
+      "capacity": "",
+      "rob": "-35",
+      "initialRob": "",
+      "lastModified": 1792101326539
     },
     {
       "id": "me-cyl",
       "name": "ME CYL",
-      "consumption": "120",
-      "threshold": "300",
-      "capacity": "4500",
-      "rob": "2900",
-      "initialRob": "2900",
-      "lastModified": 1728912000000
+      "consumption": "",
+      "threshold": "",
+      "capacity": "",
+      "rob": "-120",
+      "initialRob": "",
+      "lastModified": 1792101326539
     },
     {
       "id": "ge-sys",
       "name": "GE SYS",
-      "consumption": "35",
-      "threshold": "100",
-      "capacity": "1500",
-      "rob": "950",
-      "initialRob": "950",
-      "lastModified": 1728912000000
+      "consumption": "",
+      "threshold": "",
+      "capacity": "",
+      "rob": "-20",
+      "initialRob": "",
+      "lastModified": 1792101326539
     }
   ],
   "calculationMethod": "flowmeter",
   "fuelConsumptionData": {},
   "oilConsumptionData": {},
   "machineryHours": {},
-  "consumptionLogs": [],
+  "consumptionLogs": [
+    {
+      "id": "7993f67c-8244-43bc-8d08-225de5580ff8",
+      "timestamp": "2026-10-14T12:00:00",
+      "machineryName": "Vessel Operations",
+      "type": "FO",
+      "value": "0.00",
+      "unit": "MT",
+      "situation": "Anchor",
+      "fuelRobSnapshot": {},
+      "oilRobSnapshot": {
+        "me-sys": "0",
+        "me-cyl": "0",
+        "ge-sys": "0"
+      },
+      "lastModified": 1792056769553
+    },
+    {
+      "id": "813df988-0b0c-433c-9e58-c102449e6a9e",
+      "timestamp": "2026-10-14T12:00:00",
+      "machineryName": "Generator Engine (GE)",
+      "type": "GE SYS",
+      "value": "20",
+      "unit": "L",
+      "hoursRun": "24.0",
+      "situation": "Anchor",
+      "oilRobSnapshot": {
+        "me-sys": "0",
+        "me-cyl": "0",
+        "ge-sys": "-20"
+      },
+      "lastModified": 1792056769555,
+      "fuelRobSnapshot": {}
+    },
+    {
+      "id": "ca4b3988-0b0c-433c-9e58-c102449e6a9d",
+      "timestamp": "2026-10-14T13:00:00",
+      "machineryName": "Vessel Operations",
+      "type": "FO",
+      "value": "0.00",
+      "unit": "MT",
+      "situation": "Noon",
+      "fuelRobSnapshot": {},
+      "oilRobSnapshot": {
+        "me-sys": "0",
+        "me-cyl": "0",
+        "ge-sys": "-20"
+      },
+      "lastModified": 1792056864441
+    },
+    {
+      "id": "924ef988-0b0c-433c-9e58-c102449e6a9f",
+      "timestamp": "2026-10-14T13:00:00",
+      "machineryName": "Main Engine (ME)",
+      "type": "ME SYS",
+      "value": "35",
+      "unit": "L",
+      "hoursRun": "24.0",
+      "situation": "Noon",
+      "oilRobSnapshot": {
+        "me-sys": "-35",
+        "me-cyl": "0",
+        "ge-sys": "-20"
+      },
+      "lastModified": 1792056864441,
+      "fuelRobSnapshot": {}
+    },
+    {
+      "id": "a35ff988-0b0c-433c-9e58-c102449e6a00",
+      "timestamp": "2026-10-14T13:00:00",
+      "machineryName": "Main Engine (ME)",
+      "type": "ME CYL",
+      "value": "120",
+      "unit": "L",
+      "hoursRun": "24.0",
+      "situation": "Noon",
+      "oilRobSnapshot": {
+        "me-sys": "-35",
+        "me-cyl": "-120",
+        "ge-sys": "-20"
+      },
+      "lastModified": 1792056864442,
+      "fuelRobSnapshot": {}
+    }
+  ],
   "bunkerLogs": [],
   "onboardingCompleted": true,
   "voyageStatus": {
     "date": "2026-10-14",
-    "time": "12:00",
+    "time": "13:00",
     "situation": "Noon",
-    "voyageNumber": "042",
-    "portOfDeparture": "SINGAPORE"
+    "voyageNumber": "001",
+    "portOfDeparture": "SINGAPORE",
+    "destinationPort": "ROTTERDAM",
+    "voyageStage": "noon"
   },
   "dashboardCards": [
-    { "id": "vessel-info", "type": "vessel-info", "title": "Current Assignment", "visible": true },
-    { "id": "date", "type": "voyage-date", "title": "Report Date", "visible": true },
-    { "id": "time-status", "type": "voyage-time", "title": "Time & Status", "visible": true },
-    { "id": "voyage-info", "type": "voyage-info", "title": "Voyage Info", "visible": true },
-    { "id": "last-report", "type": "last-report", "title": "Last Submitted Report", "visible": true },
-    { "id": "activity", "type": "activity", "title": "Today's Activity", "visible": true }
+    {
+      "id": "vessel-info",
+      "type": "vessel-info",
+      "title": "Current Assignment",
+      "visible": true
+    },
+    {
+      "id": "date",
+      "type": "voyage-date",
+      "title": "Report Date",
+      "visible": true
+    },
+    {
+      "id": "time-status",
+      "type": "voyage-time",
+      "title": "Time & Status",
+      "visible": true
+    },
+    {
+      "id": "voyage-info",
+      "type": "voyage-info",
+      "title": "Voyage Info",
+      "visible": true
+    },
+    {
+      "id": "last-report",
+      "type": "last-report",
+      "title": "Last Submitted Report",
+      "visible": true
+    },
+    {
+      "id": "activity",
+      "type": "activity",
+      "title": "Today's Activity",
+      "visible": true
+    }
   ],
-  "lastModified": 1728912000000
+  "lastModified": 1792133409854
 }

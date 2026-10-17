@@ -56,7 +56,15 @@ async function startServer() {
         time: "12:00",
         situation: 'Noon',
         voyageNumber: '042',
-        portOfDeparture: 'SINGAPORE'
+        portOfDeparture: 'SINGAPORE',
+        destinationPort: 'ROTTERDAM',
+        etaDate: '',
+        etaTime: '12:00',
+        distanceToGo: '850',
+        totalDistance: '2400',
+        expense: '',
+        condition: 'Laden',
+        remarks: ''
       },
       dashboardCards: [
         { id: 'vessel-info', type: 'vessel-info', title: 'Current Assignment', visible: true },
